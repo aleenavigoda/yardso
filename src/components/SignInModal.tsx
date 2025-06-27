@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { X, Mail, Lock, Loader2, LogIn } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
@@ -15,6 +15,18 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Add timeout protection
+  useEffect(() => {
+    if (isLoading) {
+      const timeout = setTimeout(() => {
+        setIsLoading(false);
+        setError('Sign in is taking too long. Please try again.');
+      }, 10000); // 10 second timeout
+
+      return () => clearTimeout(timeout);
+    }
+  }, [isLoading]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -43,7 +55,6 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
         } else {
           setError(authError.message || 'Sign in failed. Please try again.');
         }
-        setIsLoading(false);
         return;
       }
 
@@ -67,7 +78,6 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
           } else {
             setError('Failed to load your profile. Please try again.');
           }
-          setIsLoading(false);
           return;
         }
 
@@ -84,11 +94,11 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
         onSignInSuccess();
       } else {
         setError('No user data returned from sign in. Please try again.');
-        setIsLoading(false);
       }
     } catch (err: any) {
       console.error('Sign in error:', err);
       setError('An unexpected error occurred. Please try again.');
+    } finally {
       setIsLoading(false);
     }
   };
@@ -100,6 +110,14 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
       onClose();
     }
   };
+
+  // Reset loading state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setIsLoading(false);
+      setError('');
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -182,6 +200,21 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
               )}
             </button>
           </form>
+
+          {/* Emergency reset button when stuck */}
+          {isLoading && (
+            <div className="text-center">
+              <button
+                onClick={() => {
+                  setIsLoading(false);
+                  setError('Sign in cancelled. Please try again.');
+                }}
+                className="text-gray-500 hover:text-gray-700 text-sm underline"
+              >
+                Cancel sign in
+              </button>
+            </div>
+          )}
 
           <div className="text-center">
             <button 
