@@ -63,6 +63,13 @@ const HeaderSignUpModal = ({ isOpen, onClose, onSignUpSuccess }: HeaderSignUpMod
         type: detectUrlType(url.trim())
       }));
 
+      console.log('Preparing pending profile data:', {
+        email: formData.email,
+        full_name: formData.fullName,
+        display_name: formData.fullName.split(' ')[0],
+        urls: urlsData
+      });
+
       const { error: pendingError } = await supabase
         .from('pending_profiles')
         .insert({
@@ -74,7 +81,7 @@ const HeaderSignUpModal = ({ isOpen, onClose, onSignUpSuccess }: HeaderSignUpMod
 
       if (pendingError) {
         console.error('Error storing pending profile:', pendingError);
-        throw pendingError;
+        throw new Error(`Failed to store profile data: ${pendingError.message}`);
       }
 
       console.log('Pending profile stored successfully');
