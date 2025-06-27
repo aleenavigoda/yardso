@@ -75,16 +75,18 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
 
       console.log('Storing pending profile data:', pendingProfileData);
 
-      const { error: pendingError } = await supabase
+      const { data: pendingResult, error: pendingError } = await supabase
         .from('pending_profiles')
-        .insert(pendingProfileData);
+        .insert(pendingProfileData)
+        .select()
+        .single();
 
       if (pendingError) {
         console.error('Error storing pending profile:', pendingError);
         throw new Error(`Database error saving new user: ${pendingError.message}`);
       }
 
-      console.log('Pending profile stored successfully');
+      console.log('Pending profile stored successfully:', pendingResult);
 
       // Now sign up with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -93,12 +95,15 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
         options: {
           data: {
             full_name: formData.fullName,
+            pending_profile_id: pendingResult.id
           }
         }
       });
 
       if (authError) {
         console.error('Auth error:', authError);
+        // Clean up pending profile if auth fails
+        await supabase.from('pending_profiles').delete().eq('id', pendingResult.id);
         throw authError;
       }
 

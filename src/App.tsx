@@ -44,6 +44,102 @@ function App() {
     return 'website';
   };
 
+  const createProfileFromPendingData = async (user: any) => {
+    try {
+      addDebugInfo('Attempting to create profile from pending data');
+      
+      // Check for pending profile data
+      const { data: pendingProfiles, error: pendingError } = await supabase
+        .from('pending_profiles')
+        .select('*')
+        .eq('email', user.email)
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (pendingError) {
+        addDebugInfo(`Error fetching pending profiles: ${pendingError.message}`);
+      }
+
+      let profileData = {
+        user_id: user.id,
+        email: user.email,
+        full_name: user.user_metadata?.full_name || '',
+        display_name: user.user_metadata?.full_name?.split(' ')[0] || '',
+      };
+
+      let urlsToAdd: any[] = [];
+
+      if (pendingProfiles && pendingProfiles.length > 0) {
+        const pending = pendingProfiles[0];
+        addDebugInfo(`Found pending profile: ${pending.id}`);
+        
+        profileData = {
+          ...profileData,
+          full_name: pending.full_name || profileData.full_name,
+          display_name: pending.display_name || profileData.display_name,
+        };
+
+        if (pending.urls && Array.isArray(pending.urls)) {
+          urlsToAdd = pending.urls;
+        }
+
+        // Store time logging data for later use
+        if (pending.time_logging_data) {
+          localStorage.setItem('pendingTimeLog', JSON.stringify(pending.time_logging_data));
+        }
+      } else {
+        addDebugInfo('No pending profile found, using auth metadata');
+      }
+
+      // Create the profile
+      const { data: newProfile, error: profileError } = await supabase
+        .from('profiles')
+        .insert(profileData)
+        .select()
+        .single();
+
+      if (profileError) {
+        addDebugInfo(`Profile creation error: ${profileError.message}`);
+        throw profileError;
+      }
+
+      addDebugInfo(`Profile created: ${newProfile.id}`);
+
+      // Add URLs if any
+      if (urlsToAdd.length > 0) {
+        const urlInserts = urlsToAdd.map((urlData: any) => ({
+          profile_id: newProfile.id,
+          url: urlData.url,
+          url_type: urlData.type || detectUrlType(urlData.url),
+        }));
+
+        const { error: urlError } = await supabase
+          .from('profile_urls')
+          .insert(urlInserts);
+
+        if (urlError) {
+          addDebugInfo(`URL insertion error: ${urlError.message}`);
+        } else {
+          addDebugInfo(`Added ${urlInserts.length} URLs`);
+        }
+      }
+
+      // Clean up pending profile
+      if (pendingProfiles && pendingProfiles.length > 0) {
+        await supabase
+          .from('pending_profiles')
+          .delete()
+          .eq('id', pendingProfiles[0].id);
+        addDebugInfo('Cleaned up pending profile');
+      }
+
+      return newProfile;
+    } catch (error: any) {
+      addDebugInfo(`Error in createProfileFromPendingData: ${error.message}`);
+      throw error;
+    }
+  };
+
   const handleAuthSuccess = async (user: any) => {
     try {
       addDebugInfo(`Handling auth success for user: ${user.id}`);
@@ -63,48 +159,8 @@ function App() {
       let profile = existingProfile;
 
       if (!existingProfile) {
-        addDebugInfo('Creating new profile for user');
-        // Create profile if it doesn't exist (for email confirmation flow)
-        const userData = user.user_metadata || {};
-        
-        const { data: newProfile, error: createProfileError } = await supabase
-          .from('profiles')
-          .insert({
-            user_id: user.id,
-            email: user.email,
-            full_name: userData.full_name || '',
-            display_name: userData.full_name?.split(' ')[0] || '',
-          })
-          .select()
-          .single();
-
-        if (createProfileError) {
-          addDebugInfo(`Profile creation error: ${createProfileError.message}`);
-          throw createProfileError;
-        }
-
-        profile = newProfile;
-        addDebugInfo('Profile created successfully');
-
-        // Add URLs if provided
-        if (userData.urls && userData.urls.length > 0) {
-          const urlInserts = userData.urls.map((url: string) => ({
-            profile_id: profile.id,
-            url: url.trim(),
-            url_type: detectUrlType(url.trim()),
-          }));
-
-          const { error: urlError } = await supabase
-            .from('profile_urls')
-            .insert(urlInserts);
-
-          if (urlError) {
-            addDebugInfo(`URL insertion error: ${urlError.message}`);
-            // Don't throw here, URLs are optional
-          } else {
-            addDebugInfo('URLs added successfully');
-          }
-        }
+        addDebugInfo('No existing profile found, creating new one');
+        profile = await createProfileFromPendingData(user);
       } else {
         addDebugInfo('Using existing profile');
       }
