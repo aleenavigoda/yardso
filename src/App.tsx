@@ -19,6 +19,12 @@ function App() {
   const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | undefined>();
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
+
+  const addDebugInfo = (info: string) => {
+    console.log('DEBUG:', info);
+    setDebugInfo(prev => [...prev, `${new Date().toLocaleTimeString()}: ${info}`]);
+  };
 
   // Clear authentication state and localStorage
   const clearAuthState = () => {
@@ -40,7 +46,7 @@ function App() {
 
   const handleAuthSuccess = async (user: any) => {
     try {
-      console.log('Handling auth success for user:', user.id);
+      addDebugInfo(`Handling auth success for user: ${user.id}`);
       
       // Check if profile exists
       const { data: existingProfile, error: profileError } = await supabase
@@ -50,14 +56,14 @@ function App() {
         .single();
 
       if (profileError && profileError.code !== 'PGRST116') {
-        console.error('Profile fetch error:', profileError);
+        addDebugInfo(`Profile fetch error: ${profileError.message}`);
         throw profileError;
       }
 
       let profile = existingProfile;
 
       if (!existingProfile) {
-        console.log('Creating new profile for user');
+        addDebugInfo('Creating new profile for user');
         // Create profile if it doesn't exist (for email confirmation flow)
         const userData = user.user_metadata || {};
         
@@ -73,11 +79,12 @@ function App() {
           .single();
 
         if (createProfileError) {
-          console.error('Profile creation error:', createProfileError);
+          addDebugInfo(`Profile creation error: ${createProfileError.message}`);
           throw createProfileError;
         }
 
         profile = newProfile;
+        addDebugInfo('Profile created successfully');
 
         // Add URLs if provided
         if (userData.urls && userData.urls.length > 0) {
@@ -92,20 +99,26 @@ function App() {
             .insert(urlInserts);
 
           if (urlError) {
-            console.error('URL insertion error:', urlError);
+            addDebugInfo(`URL insertion error: ${urlError.message}`);
             // Don't throw here, URLs are optional
+          } else {
+            addDebugInfo('URLs added successfully');
           }
         }
+      } else {
+        addDebugInfo('Using existing profile');
       }
 
-      console.log('Profile ready:', profile);
+      addDebugInfo('Profile ready, setting up dashboard');
       localStorage.setItem('userProfile', JSON.stringify(profile));
       setShowDashboard(true);
       setAuthError(null);
-    } catch (error) {
-      console.error('Error handling auth success:', error);
-      setAuthError('Failed to set up your profile. Please try signing in again.');
+      setIsLoading(false);
+    } catch (error: any) {
+      addDebugInfo(`Error in handleAuthSuccess: ${error.message}`);
+      setAuthError(`Failed to set up your profile: ${error.message}`);
       clearAuthState();
+      setIsLoading(false);
     }
   };
 
@@ -113,7 +126,7 @@ function App() {
   useEffect(() => {
     const handleAuth = async () => {
       try {
-        console.log('Initializing auth...');
+        addDebugInfo('Initializing auth...');
         
         // First, check for email confirmation tokens in URL hash
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
@@ -123,7 +136,7 @@ function App() {
         const errorDescription = hashParams.get('error_description');
         
         if (error) {
-          console.error('Auth error from URL:', error, errorDescription);
+          addDebugInfo(`Auth error from URL: ${error} - ${errorDescription}`);
           setAuthError(errorDescription || 'Authentication failed');
           setIsLoading(false);
           // Clean up the URL
@@ -132,7 +145,7 @@ function App() {
         }
         
         if (accessToken && refreshToken) {
-          console.log('Found auth tokens in URL, setting session...');
+          addDebugInfo('Found auth tokens in URL, setting session...');
           // Set the session from the URL tokens
           const { data, error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
@@ -140,25 +153,29 @@ function App() {
           });
           
           if (sessionError) {
-            console.error('Error setting session:', sessionError);
+            addDebugInfo(`Error setting session: ${sessionError.message}`);
             setAuthError('Failed to confirm your email. Please try signing in.');
+            setIsLoading(false);
           } else if (data.user) {
-            console.log('Session set successfully');
+            addDebugInfo('Session set successfully');
             await handleAuthSuccess(data.user);
+          } else {
+            addDebugInfo('No user data after setting session');
+            setAuthError('Authentication failed - no user data');
+            setIsLoading(false);
           }
           
           // Clean up the URL
           window.history.replaceState({}, document.title, window.location.pathname);
-          setIsLoading(false);
           return;
         }
 
         // Check for existing session on app load
-        console.log('Checking for existing session...');
+        addDebugInfo('Checking for existing session...');
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
-          console.error('Session error:', sessionError);
+          addDebugInfo(`Session error: ${sessionError.message}`);
           setAuthError('Session error occurred');
           clearAuthState();
           setIsLoading(false);
@@ -166,16 +183,16 @@ function App() {
         }
         
         if (session) {
-          console.log('Found existing session');
+          addDebugInfo('Found existing session');
           await handleAuthSuccess(session.user);
         } else {
-          console.log('No existing session found');
+          addDebugInfo('No existing session found');
+          setIsLoading(false);
         }
-      } catch (error) {
-        console.error('Auth initialization error:', error);
-        setAuthError('Failed to initialize authentication');
+      } catch (error: any) {
+        addDebugInfo(`Auth initialization error: ${error.message}`);
+        setAuthError(`Failed to initialize authentication: ${error.message}`);
         clearAuthState();
-      } finally {
         setIsLoading(false);
       }
     };
@@ -184,12 +201,13 @@ function App() {
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session?.user?.id);
+      addDebugInfo(`Auth state changed: ${event} - User: ${session?.user?.id || 'none'}`);
       
       if (event === 'SIGNED_IN' && session) {
         await handleAuthSuccess(session.user);
       } else if (event === 'SIGNED_OUT') {
         clearAuthState();
+        setIsLoading(false);
       }
     });
 
@@ -228,6 +246,7 @@ function App() {
   const handleRetry = () => {
     setAuthError(null);
     setIsLoading(true);
+    setDebugInfo([]);
     window.location.reload();
   };
 
@@ -235,9 +254,19 @@ function App() {
   if (isLoading) {
     return (
       <div className="min-h-screen w-full bg-amber-200 flex items-center justify-center">
-        <div className="text-center">
+        <div className="text-center max-w-md mx-auto px-4">
           <div className="text-2xl font-bold text-black italic mb-2">yard</div>
-          <div className="text-gray-700">Loading...</div>
+          <div className="text-gray-700 mb-4">Loading...</div>
+          
+          {/* Debug info for development */}
+          {debugInfo.length > 0 && (
+            <div className="bg-white rounded-lg p-4 text-left text-xs text-gray-600 max-h-40 overflow-y-auto">
+              <div className="font-semibold mb-2">Debug Info:</div>
+              {debugInfo.map((info, index) => (
+                <div key={index} className="mb-1">{info}</div>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -252,6 +281,17 @@ function App() {
           <div className="bg-white rounded-2xl p-6 shadow-lg">
             <h2 className="text-lg font-semibold text-gray-900 mb-2">Authentication Error</h2>
             <p className="text-gray-600 text-sm mb-4">{authError}</p>
+            
+            {/* Debug info for development */}
+            {debugInfo.length > 0 && (
+              <div className="bg-gray-50 rounded-lg p-3 text-left text-xs text-gray-600 max-h-32 overflow-y-auto mb-4">
+                <div className="font-semibold mb-2">Debug Info:</div>
+                {debugInfo.map((info, index) => (
+                  <div key={index} className="mb-1">{info}</div>
+                ))}
+              </div>
+            )}
+            
             <div className="flex gap-3 justify-center">
               <button
                 onClick={handleRetry}
@@ -263,6 +303,7 @@ function App() {
                 onClick={() => {
                   setAuthError(null);
                   clearAuthState();
+                  setIsLoading(false);
                 }}
                 className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
               >
