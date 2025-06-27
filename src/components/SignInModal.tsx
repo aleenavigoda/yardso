@@ -16,18 +16,6 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Add timeout protection
-  useEffect(() => {
-    if (isLoading) {
-      const timeout = setTimeout(() => {
-        setIsLoading(false);
-        setError('Sign in is taking too long. Please try again.');
-      }, 10000); // 10 second timeout
-
-      return () => clearTimeout(timeout);
-    }
-  }, [isLoading]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -61,37 +49,12 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
       console.log('Auth successful, user ID:', authData.user?.id);
 
       if (authData.user) {
-        // Get the user's profile - it should exist if they're signing in
-        console.log('Fetching profile for user:', authData.user.id);
-        
-        const { data: profile, error: profileError } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('user_id', authData.user.id)
-          .single();
-
-        if (profileError) {
-          console.error('Profile error:', profileError);
-          if (profileError.code === 'PGRST116') {
-            // Profile doesn't exist - this shouldn't happen for existing users
-            setError('Profile not found. Please contact support or try signing up again.');
-          } else {
-            setError('Failed to load your profile. Please try again.');
-          }
-          return;
-        }
-
-        console.log('Profile found:', profile);
-
-        // Store user profile for dashboard
-        localStorage.setItem('userProfile', JSON.stringify(profile));
-        
-        // Reset form
+        // Reset form and close modal immediately
         setFormData({ email: '', password: '' });
-        
-        // Close modal and trigger success
         onClose();
-        onSignInSuccess();
+        
+        // The auth state change listener will handle the rest
+        console.log('Sign in successful, auth state change will handle profile loading');
       } else {
         setError('No user data returned from sign in. Please try again.');
       }
@@ -200,21 +163,6 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
               )}
             </button>
           </form>
-
-          {/* Emergency reset button when stuck */}
-          {isLoading && (
-            <div className="text-center">
-              <button
-                onClick={() => {
-                  setIsLoading(false);
-                  setError('Sign in cancelled. Please try again.');
-                }}
-                className="text-gray-500 hover:text-gray-700 text-sm underline"
-              >
-                Cancel sign in
-              </button>
-            </div>
-          )}
 
           <div className="text-center">
             <button 

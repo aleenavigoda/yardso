@@ -20,6 +20,7 @@ function App() {
   const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | undefined>();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [authProcessing, setAuthProcessing] = useState(false);
 
   const detectUrlType = (url: string): string => {
     if (url.includes('github.com')) return 'github';
@@ -125,6 +126,14 @@ function App() {
   };
 
   const handleAuthSuccess = async (user: any) => {
+    // Prevent duplicate processing
+    if (authProcessing) {
+      console.log('Auth already processing, skipping...');
+      return;
+    }
+
+    setAuthProcessing(true);
+    
     try {
       console.log('Handling auth success for user:', user.id);
       
@@ -157,6 +166,8 @@ function App() {
       console.error('Error in handleAuthSuccess:', error);
       // Don't show error to user, just log it
       console.log('Auth success failed, but continuing...');
+    } finally {
+      setAuthProcessing(false);
     }
   };
 
@@ -224,6 +235,7 @@ function App() {
         setPendingTimeLog(undefined);
         setIsAuthenticated(false);
         setUserProfile(null);
+        setAuthProcessing(false);
       }
     });
 
