@@ -21,6 +21,12 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
     setIsLoading(true);
     setError('');
 
+    // Set a timeout to prevent infinite loading
+    const timeoutId = setTimeout(() => {
+      setIsLoading(false);
+      setError('Sign in is taking too long. Please try again.');
+    }, 15000); // 15 second timeout
+
     try {
       console.log('Attempting sign in for:', formData.email);
       
@@ -30,9 +36,24 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
         password: formData.password,
       });
 
+      // Clear the timeout since we got a response
+      clearTimeout(timeoutId);
+
       if (authError) {
         console.error('Auth error:', authError);
-        throw authError;
+        
+        // Handle specific error cases
+        if (authError.message.includes('Invalid login credentials')) {
+          setError('Invalid email or password. Please check your credentials and try again.');
+        } else if (authError.message.includes('Email not confirmed')) {
+          setError('Please check your email and click the confirmation link before signing in.');
+        } else if (authError.message.includes('Too many requests')) {
+          setError('Too many sign-in attempts. Please wait a few minutes and try again.');
+        } else {
+          setError(authError.message || 'Sign in failed. Please try again.');
+        }
+        setIsLoading(false);
+        return;
       }
 
       console.log('Auth successful, user ID:', authData.user?.id);
@@ -51,9 +72,12 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
           console.error('Profile error:', profileError);
           if (profileError.code === 'PGRST116') {
             // Profile doesn't exist - this shouldn't happen for existing users
-            throw new Error('Profile not found. Please contact support or try signing up again.');
+            setError('Profile not found. Please contact support or try signing up again.');
+          } else {
+            setError('Failed to load your profile. Please try again.');
           }
-          throw profileError;
+          setIsLoading(false);
+          return;
         }
 
         console.log('Profile found:', profile);
@@ -68,13 +92,24 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
         onClose();
         onSignInSuccess();
       } else {
-        throw new Error('No user data returned from sign in');
+        setError('No user data returned from sign in. Please try again.');
+        setIsLoading(false);
       }
     } catch (err: any) {
+      // Clear the timeout
+      clearTimeout(timeoutId);
+      
       console.error('Sign in error:', err);
-      setError(err.message || 'An error occurred during sign in');
-    } finally {
+      setError('An unexpected error occurred. Please try again.');
       setIsLoading(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (!isLoading) {
+      setFormData({ email: '', password: '' });
+      setError('');
+      onClose();
     }
   };
 
@@ -84,8 +119,9 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
       <div className="bg-white rounded-3xl p-6 max-w-sm w-full relative animate-scale-in shadow-2xl">
         <button
-          onClick={onClose}
-          className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 transition-colors duration-200"
+          onClick={handleClose}
+          disabled={isLoading}
+          className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           aria-label="Close modal"
         >
           <X size={20} />
@@ -105,6 +141,14 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
           {error && (
             <div className="bg-red-50 rounded-xl p-3 border border-red-200">
               <p className="text-red-800 text-sm">{error}</p>
+              {error.includes('confirmation') && (
+                <button
+                  onClick={() => setError('')}
+                  className="text-red-600 hover:text-red-800 text-xs underline mt-1"
+                >
+                  Dismiss
+                </button>
+              )}
             </div>
           )}
 
@@ -122,6 +166,7 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
                 className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200 text-sm"
                 required
                 disabled={isLoading}
+                autoComplete="email"
               />
             </div>
 
@@ -138,12 +183,13 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
                 className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200 text-sm"
                 required
                 disabled={isLoading}
+                autoComplete="current-password"
               />
             </div>
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || !formData.email.trim() || !formData.password.trim()}
               className="w-full bg-black hover:bg-gray-800 text-white py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
             >
               {isLoading ? (
@@ -158,10 +204,28 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
           </form>
 
           <div className="text-center">
-            <button className="text-amber-700 hover:text-amber-800 text-sm font-medium hover:underline">
+            <button 
+              onClick={() => setError('Password reset functionality coming soon!')}
+              disabled={isLoading}
+              className="text-amber-700 hover:text-amber-800 text-sm font-medium hover:underline disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               Forgot your password?
             </button>
           </div>
+
+          {isLoading && (
+            <div className="text-center">
+              <button
+                onClick={() => {
+                  setIsLoading(false);
+                  setError('Sign in cancelled. Please try again.');
+                }}
+                className="text-gray-500 hover:text-gray-700 text-xs underline"
+              >
+                Cancel sign in
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

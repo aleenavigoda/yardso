@@ -178,9 +178,18 @@ function App() {
 
   // Handle email confirmation and auth state changes
   useEffect(() => {
+    let authTimeout: NodeJS.Timeout;
+
     const handleAuth = async () => {
       try {
         console.log('Initializing auth...');
+        
+        // Set a timeout for auth initialization
+        authTimeout = setTimeout(() => {
+          console.log('Auth initialization timeout');
+          setIsLoading(false);
+          setAuthError('Authentication is taking too long. Please refresh the page.');
+        }, 10000); // 10 second timeout
         
         // Check for email confirmation tokens in URL hash
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
@@ -191,6 +200,7 @@ function App() {
         
         if (error) {
           console.log('Auth error from URL:', error, errorDescription);
+          clearTimeout(authTimeout);
           setAuthError(errorDescription || 'Authentication failed');
           setIsLoading(false);
           window.history.replaceState({}, document.title, window.location.pathname);
@@ -204,6 +214,8 @@ function App() {
             access_token: accessToken,
             refresh_token: refreshToken
           });
+          
+          clearTimeout(authTimeout);
           
           if (sessionError) {
             console.error('Session error:', sessionError);
@@ -226,6 +238,8 @@ function App() {
         console.log('Checking for existing session...');
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
+        clearTimeout(authTimeout);
+        
         if (sessionError) {
           console.error('Session error:', sessionError);
           setAuthError('Session error occurred');
@@ -239,10 +253,16 @@ function App() {
           // Also check if we have profile in localStorage
           const storedProfile = localStorage.getItem('userProfile');
           if (storedProfile) {
-            const profile = JSON.parse(storedProfile);
-            setUserProfile(profile);
-            setIsAuthenticated(true);
-            setIsLoading(false);
+            try {
+              const profile = JSON.parse(storedProfile);
+              setUserProfile(profile);
+              setIsAuthenticated(true);
+              setIsLoading(false);
+            } catch (e) {
+              console.error('Error parsing stored profile:', e);
+              localStorage.removeItem('userProfile');
+              await handleAuthSuccess(session.user);
+            }
           } else {
             await handleAuthSuccess(session.user);
           }
@@ -251,6 +271,7 @@ function App() {
           setIsLoading(false);
         }
       } catch (error: any) {
+        clearTimeout(authTimeout);
         console.error('Auth initialization error:', error);
         setAuthError(`Failed to initialize authentication: ${error.message}`);
         clearAuthState();
@@ -272,7 +293,10 @@ function App() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      if (authTimeout) clearTimeout(authTimeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const handleTimeLoggingSignUp = (timeLoggingData: TimeLoggingData) => {
