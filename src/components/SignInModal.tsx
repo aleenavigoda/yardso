@@ -43,27 +43,34 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
         } else {
           setError(authError.message || 'Sign in failed. Please try again.');
         }
+        setIsLoading(false);
         return;
       }
 
       console.log('Auth successful, user ID:', authData.user?.id);
 
       if (authData.user) {
-        // Reset form and close modal immediately
+        // Reset form
         setFormData({ email: '', password: '' });
-        onClose();
+        setError('');
         
-        // The auth state change listener will handle the rest
-        console.log('Sign in successful, auth state change will handle profile loading');
+        // Close modal immediately - don't wait for profile loading
+        console.log('Closing modal and triggering success callback');
+        onClose();
+        onSignInSuccess();
+        
+        // The auth state change listener will handle profile loading
+        console.log('Sign in successful, auth state change will handle the rest');
       } else {
         setError('No user data returned from sign in. Please try again.');
+        setIsLoading(false);
       }
     } catch (err: any) {
       console.error('Sign in error:', err);
       setError('An unexpected error occurred. Please try again.');
-    } finally {
       setIsLoading(false);
     }
+    // Note: Don't set isLoading to false here if successful - modal will close
   };
 
   const handleClose = () => {
@@ -74,10 +81,15 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
     }
   };
 
-  // Reset loading state when modal opens
+  // Reset state when modal opens/closes
   useEffect(() => {
     if (isOpen) {
       setIsLoading(false);
+      setError('');
+    } else {
+      // Reset loading state when modal closes
+      setIsLoading(false);
+      setFormData({ email: '', password: '' });
       setError('');
     }
   }, [isOpen]);

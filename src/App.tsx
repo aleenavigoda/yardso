@@ -20,7 +20,6 @@ function App() {
   const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | undefined>();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
-  const [authProcessing, setAuthProcessing] = useState(false);
 
   const detectUrlType = (url: string): string => {
     if (url.includes('github.com')) return 'github';
@@ -126,14 +125,6 @@ function App() {
   };
 
   const handleAuthSuccess = async (user: any) => {
-    // Prevent duplicate processing
-    if (authProcessing) {
-      console.log('Auth already processing, skipping...');
-      return;
-    }
-
-    setAuthProcessing(true);
-    
     try {
       console.log('Handling auth success for user:', user.id);
       
@@ -146,14 +137,28 @@ function App() {
 
       if (profileError && profileError.code !== 'PGRST116') {
         console.error('Profile fetch error:', profileError);
-        throw profileError;
+        // Don't throw - continue with basic auth
+        console.log('Continuing with basic auth despite profile error');
       }
 
       let profile = existingProfile;
 
       if (!existingProfile) {
         console.log('No existing profile found, creating new one');
-        profile = await createProfileFromPendingData(user);
+        try {
+          profile = await createProfileFromPendingData(user);
+        } catch (error) {
+          console.error('Failed to create profile, using basic user data:', error);
+          // Create a minimal profile object from user data
+          profile = {
+            id: user.id,
+            user_id: user.id,
+            email: user.email,
+            full_name: user.user_metadata?.full_name || '',
+            display_name: user.user_metadata?.full_name?.split(' ')[0] || 'User',
+            time_balance_hours: 0
+          };
+        }
       } else {
         console.log('Using existing profile:', existingProfile.id);
       }
@@ -161,13 +166,12 @@ function App() {
       localStorage.setItem('userProfile', JSON.stringify(profile));
       setUserProfile(profile);
       setIsAuthenticated(true);
-      setShowDashboard(true);
+      
+      console.log('Auth success completed successfully');
     } catch (error: any) {
       console.error('Error in handleAuthSuccess:', error);
-      // Don't show error to user, just log it
-      console.log('Auth success failed, but continuing...');
-    } finally {
-      setAuthProcessing(false);
+      // Don't prevent sign-in for profile errors
+      console.log('Auth success had errors but continuing...');
     }
   };
 
@@ -206,6 +210,7 @@ function App() {
               const profile = JSON.parse(storedProfile);
               setUserProfile(profile);
               setIsAuthenticated(true);
+              console.log('Loaded profile from localStorage');
             } catch (e) {
               localStorage.removeItem('userProfile');
               await handleAuthSuccess(session.user);
@@ -235,7 +240,6 @@ function App() {
         setPendingTimeLog(undefined);
         setIsAuthenticated(false);
         setUserProfile(null);
-        setAuthProcessing(false);
       }
     });
 
