@@ -8,6 +8,7 @@ import TimeLoggingBanner from './components/TimeLoggingBanner';
 import TimeLoggingModal from './components/TimeLoggingModal';
 import SignUpModal from './components/SignUpModal';
 import Dashboard from './components/Dashboard';
+import SocialFeed from './components/SocialFeed';
 import { supabase } from './lib/supabase';
 import type { TimeLoggingData } from './types';
 
@@ -450,6 +451,9 @@ function App() {
           
           {/* Show time logging banner for both authenticated and non-authenticated users */}
           <TimeLoggingBanner onLogTime={() => setIsTimeLoggingOpen(true)} />
+          
+          {/* Show social feed for authenticated users */}
+          {isAuthenticated && <SocialFeed />}
           
           <SearchForm
             searchValue={searchValue}

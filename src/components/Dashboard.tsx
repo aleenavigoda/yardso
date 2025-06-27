@@ -170,17 +170,59 @@ const Dashboard = ({ onBack }: DashboardProps) => {
     }
   };
 
-  const handleTimeLoggingFromModal = (timeLoggingData: TimeLoggingData) => {
-    // Since user is already signed in, we can directly set the form data
-    setTimeLogForm({
-      mode: timeLoggingData.mode,
-      hours: timeLoggingData.hours,
-      name: timeLoggingData.name,
-      contact: timeLoggingData.contact,
-      description: timeLoggingData.description
-    });
-    setIsTimeLoggingOpen(false);
-    // The form data is now ready for logging
+  const handleTimeLoggingDirect = async (timeLoggingData: TimeLoggingData) => {
+    if (!profile) return;
+
+    try {
+      const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+      // Check if the contact is an existing user
+      const { data: existingProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, user_id, email, full_name')
+        .eq('email', timeLoggingData.contact)
+        .single();
+
+      if (existingProfile) {
+        // User exists - create direct time transaction
+        const { error: transactionError } = await supabase
+          .from('time_transactions')
+          .insert({
+            giver_id: timeLoggingData.mode === 'helped' ? profile.id : existingProfile.id,
+            receiver_id: timeLoggingData.mode === 'helped' ? existingProfile.id : profile.id,
+            hours: timeLoggingData.hours,
+            description: timeLoggingData.description,
+            logged_by: profile.id,
+            status: 'pending'
+          });
+
+        if (transactionError) throw transactionError;
+
+        alert('Time logged successfully! The other person will be notified to confirm.');
+      } else {
+        // User doesn't exist - create invitation and pending time log
+        const { data: invitationData, error: invitationError } = await supabase
+          .rpc('create_invitation_with_time_log', {
+            p_inviter_profile_id: profile.id,
+            p_invitee_email: isValidEmail(timeLoggingData.contact) ? timeLoggingData.contact : '',
+            p_invitee_name: timeLoggingData.name,
+            p_invitee_contact: timeLoggingData.contact,
+            p_hours: timeLoggingData.hours,
+            p_description: timeLoggingData.description,
+            p_service_type: 'general',
+            p_mode: timeLoggingData.mode
+          });
+
+        if (invitationError) throw invitationError;
+
+        alert(`Invitation sent to ${timeLoggingData.name}! They'll receive an email to join Yard and confirm the time log.`);
+      }
+
+      setIsTimeLoggingOpen(false);
+    } catch (error) {
+      console.error('Error logging time:', error);
+      alert('Error logging time. Please try again.');
+    }
   };
 
   const timeOptions = [0.5, 1, 1.5, 2, 3, 4, 6, 8];
@@ -443,7 +485,8 @@ const Dashboard = ({ onBack }: DashboardProps) => {
       <TimeLoggingModal
         isOpen={isTimeLoggingOpen}
         onClose={() => setIsTimeLoggingOpen(false)}
-        onSignUp={handleTimeLoggingFromModal}
+        onLogTime={handleTimeLoggingDirect}
+        isAuthenticated={true}
       />
     </div>
   );
