@@ -18,21 +18,8 @@ function App() {
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
   const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | undefined>();
-  const [isLoading, setIsLoading] = useState(true);
-  const [authError, setAuthError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
-
-  // Clear authentication state and localStorage
-  const clearAuthState = () => {
-    localStorage.removeItem('userProfile');
-    localStorage.removeItem('pendingTimeLog');
-    setShowDashboard(false);
-    setPendingTimeLog(undefined);
-    setAuthError(null);
-    setIsAuthenticated(false);
-    setUserProfile(null);
-  };
 
   const detectUrlType = (url: string): string => {
     if (url.includes('github.com')) return 'github';
@@ -166,137 +153,81 @@ function App() {
       setUserProfile(profile);
       setIsAuthenticated(true);
       setShowDashboard(true);
-      setAuthError(null);
-      setIsLoading(false);
     } catch (error: any) {
       console.error('Error in handleAuthSuccess:', error);
-      setAuthError(`Failed to set up your profile: ${error.message}`);
-      clearAuthState();
-      setIsLoading(false);
+      // Don't show error to user, just log it
+      console.log('Auth success failed, but continuing...');
     }
   };
 
-  // Handle email confirmation and auth state changes
+  // Simplified auth initialization
   useEffect(() => {
-    let authTimeout: NodeJS.Timeout;
-
-    const handleAuth = async () => {
+    const initAuth = async () => {
       try {
-        console.log('Initializing auth...');
-        
-        // Set a timeout for auth initialization
-        authTimeout = setTimeout(() => {
-          console.log('Auth initialization timeout');
-          setIsLoading(false);
-          setAuthError('Authentication is taking too long. Please refresh the page.');
-        }, 10000); // 10 second timeout
-        
         // Check for email confirmation tokens in URL hash
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const accessToken = hashParams.get('access_token');
         const refreshToken = hashParams.get('refresh_token');
-        const error = hashParams.get('error');
-        const errorDescription = hashParams.get('error_description');
-        
-        if (error) {
-          console.log('Auth error from URL:', error, errorDescription);
-          clearTimeout(authTimeout);
-          setAuthError(errorDescription || 'Authentication failed');
-          setIsLoading(false);
-          window.history.replaceState({}, document.title, window.location.pathname);
-          return;
-        }
         
         if (accessToken && refreshToken) {
           console.log('Found auth tokens in URL, setting session...');
-          // Set the session from the URL tokens
-          const { data, error: sessionError } = await supabase.auth.setSession({
+          const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken
           });
           
-          clearTimeout(authTimeout);
-          
-          if (sessionError) {
-            console.error('Session error:', sessionError);
-            setAuthError('Failed to confirm your email. Please try signing in.');
-            setIsLoading(false);
-          } else if (data.user) {
-            console.log('Session set successfully');
+          if (!error && data.user) {
             await handleAuthSuccess(data.user);
-          } else {
-            console.log('No user data after setting session');
-            setAuthError('Authentication failed - no user data');
-            setIsLoading(false);
           }
           
           window.history.replaceState({}, document.title, window.location.pathname);
           return;
         }
 
-        // Check for existing session on app load
-        console.log('Checking for existing session...');
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        clearTimeout(authTimeout);
-        
-        if (sessionError) {
-          console.error('Session error:', sessionError);
-          setAuthError('Session error occurred');
-          clearAuthState();
-          setIsLoading(false);
-          return;
-        }
+        // Check for existing session
+        const { data: { session } } = await supabase.auth.getSession();
         
         if (session) {
-          console.log('Found existing session');
-          // Also check if we have profile in localStorage
+          // Check if we have profile in localStorage first
           const storedProfile = localStorage.getItem('userProfile');
           if (storedProfile) {
             try {
               const profile = JSON.parse(storedProfile);
               setUserProfile(profile);
               setIsAuthenticated(true);
-              setIsLoading(false);
             } catch (e) {
-              console.error('Error parsing stored profile:', e);
               localStorage.removeItem('userProfile');
               await handleAuthSuccess(session.user);
             }
           } else {
             await handleAuthSuccess(session.user);
           }
-        } else {
-          console.log('No existing session found');
-          setIsLoading(false);
         }
-      } catch (error: any) {
-        clearTimeout(authTimeout);
+      } catch (error) {
         console.error('Auth initialization error:', error);
-        setAuthError(`Failed to initialize authentication: ${error.message}`);
-        clearAuthState();
-        setIsLoading(false);
+        // Don't show error to user, just continue
       }
     };
 
-    handleAuth();
+    initAuth();
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session?.user?.id || 'no user');
+      console.log('Auth state changed:', event);
       
       if (event === 'SIGNED_IN' && session) {
         await handleAuthSuccess(session.user);
       } else if (event === 'SIGNED_OUT') {
-        clearAuthState();
-        setIsLoading(false);
+        localStorage.removeItem('userProfile');
+        localStorage.removeItem('pendingTimeLog');
+        setShowDashboard(false);
+        setPendingTimeLog(undefined);
+        setIsAuthenticated(false);
+        setUserProfile(null);
       }
     });
 
-    return () => {
-      if (authTimeout) clearTimeout(authTimeout);
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   const handleTimeLoggingSignUp = (timeLoggingData: TimeLoggingData) => {
@@ -388,69 +319,7 @@ function App() {
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
-    clearAuthState();
   };
-
-  const handleRetry = () => {
-    setAuthError(null);
-    setIsLoading(true);
-    window.location.reload();
-  };
-
-  const handleSkipAuth = () => {
-    setAuthError(null);
-    clearAuthState();
-    setIsLoading(false);
-  };
-
-  // Show loading state while checking auth
-  if (isLoading) {
-    return (
-      <div className="min-h-screen w-full bg-amber-200 flex items-center justify-center">
-        <div className="text-center max-w-md mx-auto px-4">
-          <div className="text-2xl font-bold text-black italic mb-2">yard</div>
-          <div className="text-gray-700 mb-4">Loading...</div>
-          
-          <button
-            onClick={handleSkipAuth}
-            className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
-          >
-            Skip Authentication
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Show error state if auth failed
-  if (authError) {
-    return (
-      <div className="min-h-screen w-full bg-amber-200 flex items-center justify-center">
-        <div className="text-center max-w-md mx-auto px-4">
-          <div className="text-2xl font-bold text-black italic mb-4">yard</div>
-          <div className="bg-white rounded-2xl p-6 shadow-lg">
-            <h2 className="text-lg font-semibold text-gray-900 mb-2">Authentication Error</h2>
-            <p className="text-gray-600 text-sm mb-4">{authError}</p>
-            
-            <div className="flex gap-3 justify-center">
-              <button
-                onClick={handleRetry}
-                className="px-4 py-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-colors"
-              >
-                Try Again
-              </button>
-              <button
-                onClick={handleSkipAuth}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
-              >
-                Continue as Guest
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // Show dashboard if user is authenticated and wants to see it
   if (showDashboard && isAuthenticated) {

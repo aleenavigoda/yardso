@@ -21,12 +21,6 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
     setIsLoading(true);
     setError('');
 
-    // Set a timeout to prevent infinite loading
-    const timeoutId = setTimeout(() => {
-      setIsLoading(false);
-      setError('Sign in is taking too long. Please try again.');
-    }, 15000); // 15 second timeout
-
     try {
       console.log('Attempting sign in for:', formData.email);
       
@@ -35,9 +29,6 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
         email: formData.email.toLowerCase().trim(),
         password: formData.password,
       });
-
-      // Clear the timeout since we got a response
-      clearTimeout(timeoutId);
 
       if (authError) {
         console.error('Auth error:', authError);
@@ -96,9 +87,6 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
         setIsLoading(false);
       }
     } catch (err: any) {
-      // Clear the timeout
-      clearTimeout(timeoutId);
-      
       console.error('Sign in error:', err);
       setError('An unexpected error occurred. Please try again.');
       setIsLoading(false);
@@ -141,14 +129,6 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
           {error && (
             <div className="bg-red-50 rounded-xl p-3 border border-red-200">
               <p className="text-red-800 text-sm">{error}</p>
-              {error.includes('confirmation') && (
-                <button
-                  onClick={() => setError('')}
-                  className="text-red-600 hover:text-red-800 text-xs underline mt-1"
-                >
-                  Dismiss
-                </button>
-              )}
             </div>
           )}
 
@@ -212,20 +192,6 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
               Forgot your password?
             </button>
           </div>
-
-          {isLoading && (
-            <div className="text-center">
-              <button
-                onClick={() => {
-                  setIsLoading(false);
-                  setError('Sign in cancelled. Please try again.');
-                }}
-                className="text-gray-500 hover:text-gray-700 text-xs underline"
-              >
-                Cancel sign in
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </div>
