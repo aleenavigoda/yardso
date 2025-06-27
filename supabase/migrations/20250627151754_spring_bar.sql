@@ -1,27 +1,34 @@
 /*
-  # Fix Sign-up Flow
+  # Fix Sign-up Flow and Database Issues
 
-  1. Database Changes
-    - Ensure pending_profiles table works correctly
-    - Fix the auth trigger to properly transfer data
-    - Add better error handling and logging
+  1. Clean Setup
+    - Drop all existing functions and triggers cleanly
+    - Recreate pending_profiles table
+    - Set up proper transfer mechanism
 
-  2. Flow
-    - User fills form and clicks "Create Account"
-    - Data is stored in pending_profiles table
-    - Auth signup is called
-    - Email confirmation is sent
-    - User clicks email link
-    - Trigger transfers pending_profiles data to profiles table
-    - User is redirected to dashboard
+  2. Functions
+    - transfer_pending_profile_data: Moves data from pending to profiles
+    - handle_new_user: Trigger function for auth.users
+    - cleanup_expired_pending_profiles: Maintenance function
+    - debug helpers for troubleshooting
+
+  3. Security
+    - No RLS on pending_profiles (temporary data)
+    - Proper error handling and logging
 */
 
--- Clean up existing functions and triggers
+-- Clean up ALL existing functions and triggers first
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
-DROP FUNCTION IF EXISTS handle_new_user();
-DROP FUNCTION IF EXISTS transfer_pending_profile(uuid, text);
+DROP FUNCTION IF EXISTS handle_new_user() CASCADE;
+DROP FUNCTION IF EXISTS transfer_pending_profile(uuid, text) CASCADE;
+DROP FUNCTION IF EXISTS transfer_pending_profile_data(uuid, text) CASCADE;
+DROP FUNCTION IF EXISTS cleanup_expired_pending_profiles() CASCADE;
+DROP FUNCTION IF EXISTS debug_pending_profiles() CASCADE;
+DROP FUNCTION IF EXISTS test_signup_flow(text, text) CASCADE;
+DROP FUNCTION IF EXISTS check_pending_profiles() CASCADE;
+DROP FUNCTION IF EXISTS test_profile_creation(text) CASCADE;
 
--- Ensure pending_profiles table exists with correct structure
+-- Recreate pending_profiles table with correct structure
 DROP TABLE IF EXISTS pending_profiles CASCADE;
 
 CREATE TABLE pending_profiles (
@@ -44,7 +51,7 @@ CREATE INDEX idx_pending_profiles_token ON pending_profiles(token);
 CREATE INDEX idx_pending_profiles_expires ON pending_profiles(expires_at);
 
 -- Function to transfer pending profile data to profiles table
-CREATE OR REPLACE FUNCTION transfer_pending_profile_data(user_id_param uuid, user_email text)
+CREATE FUNCTION transfer_pending_profile_data(user_id_param uuid, user_email text)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -141,7 +148,7 @@ END;
 $$;
 
 -- Trigger function to handle new user creation
-CREATE OR REPLACE FUNCTION handle_new_user()
+CREATE FUNCTION handle_new_user()
 RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -176,7 +183,7 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION handle_new_user();
 
 -- Function to clean up expired pending profiles
-CREATE OR REPLACE FUNCTION cleanup_expired_pending_profiles()
+CREATE FUNCTION cleanup_expired_pending_profiles()
 RETURNS integer
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -193,7 +200,7 @@ END;
 $$;
 
 -- Helper function to check pending profiles (for debugging)
-CREATE OR REPLACE FUNCTION debug_pending_profiles()
+CREATE FUNCTION debug_pending_profiles()
 RETURNS TABLE(
   id uuid,
   email text,
@@ -226,7 +233,7 @@ AS $$
 $$;
 
 -- Test function to verify the flow works
-CREATE OR REPLACE FUNCTION test_signup_flow(test_email text, test_name text)
+CREATE FUNCTION test_signup_flow(test_email text, test_name text)
 RETURNS jsonb
 LANGUAGE plpgsql
 SECURITY DEFINER
