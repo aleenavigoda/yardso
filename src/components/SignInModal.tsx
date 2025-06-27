@@ -64,6 +64,8 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
         // Reset form
         setFormData({ email: '', password: '' });
         
+        // Close modal and trigger success
+        onClose();
         onSignInSuccess();
       } else {
         throw new Error('No user data returned from sign in');
