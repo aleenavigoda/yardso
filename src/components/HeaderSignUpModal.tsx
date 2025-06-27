@@ -89,17 +89,19 @@ const HeaderSignUpModal = ({ isOpen, onClose, onSignUpSuccess }: HeaderSignUpMod
         password: formData.password,
         options: {
           data: {
-            full_name: formData.fullName,
+            full_name: formData.fullName
           }
         }
       });
 
       if (authError) {
         console.error('Auth error:', authError);
+        // Clean up pending profile if auth fails
+        await supabase.from('pending_profiles').delete().eq('email', formData.email);
         throw authError;
       }
 
-      console.log('Auth data:', authData);
+      console.log('Auth signup successful:', authData);
 
       // Check if email confirmation is required
       if (authData.user && !authData.session) {
