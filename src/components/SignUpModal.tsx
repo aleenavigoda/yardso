@@ -65,27 +65,23 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
         type: detectUrlType(url.trim())
       }));
 
-      console.log('Preparing pending profile data:', {
+      const pendingProfileData = {
         email: formData.email,
         full_name: formData.fullName,
         display_name: formData.fullName.split(' ')[0],
         urls: urlsData,
-        time_logging_data: timeLoggingData
-      });
+        time_logging_data: timeLoggingData || null
+      };
+
+      console.log('Storing pending profile data:', pendingProfileData);
 
       const { error: pendingError } = await supabase
         .from('pending_profiles')
-        .insert({
-          email: formData.email,
-          full_name: formData.fullName,
-          display_name: formData.fullName.split(' ')[0],
-          urls: urlsData,
-          time_logging_data: timeLoggingData || null
-        });
+        .insert(pendingProfileData);
 
       if (pendingError) {
         console.error('Error storing pending profile:', pendingError);
-        throw new Error(`Failed to store profile data: ${pendingError.message}`);
+        throw new Error(`Database error saving new user: ${pendingError.message}`);
       }
 
       console.log('Pending profile stored successfully');
