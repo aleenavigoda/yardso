@@ -2,20 +2,24 @@
   # Fix Authentication Flow and Profile Creation
 
   1. Database Functions
-    - Fix the transfer_pending_profile function
-    - Improve error handling in handle_new_user trigger
-    - Add better logging for debugging
+    - Drop and recreate transfer_pending_profile function with proper return type
+    - Update handle_new_user trigger function with better error handling
+    - Add debugging and testing functions
 
-  2. Trigger Updates
-    - Ensure trigger works properly with email confirmation flow
-    - Add fallback profile creation
+  2. Triggers
+    - Recreate trigger on auth.users table
+    - Ensure proper profile creation flow
 
-  3. Testing
-    - Add function to manually test the flow
+  3. Testing Functions
+    - Add functions to test and debug profile creation
+    - Add function to check pending profiles status
 */
 
 -- First, let's check if there are any pending profiles and clean up the functions
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+
+-- Drop the existing function completely to avoid return type conflicts
+DROP FUNCTION IF EXISTS transfer_pending_profile(uuid, text);
 
 -- Recreate the transfer function with better debugging
 CREATE OR REPLACE FUNCTION transfer_pending_profile(user_id_param uuid, user_email text)
@@ -108,7 +112,9 @@ EXCEPTION
 END;
 $$;
 
--- Update the trigger function with better error handling and logging
+-- Drop and recreate the trigger function with better error handling and logging
+DROP FUNCTION IF EXISTS handle_new_user();
+
 CREATE OR REPLACE FUNCTION handle_new_user()
 RETURNS trigger
 LANGUAGE plpgsql
