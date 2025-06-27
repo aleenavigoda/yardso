@@ -290,6 +290,10 @@ function App() {
     setShowDashboard(true);
   };
 
+  const handleDashboardClick = () => {
+    setShowDashboard(true);
+  };
+
   const handleRetry = () => {
     setAuthError(null);
     setIsLoading(true);
@@ -362,9 +366,12 @@ function App() {
         <Header 
           onSignUpSuccess={handleHeaderSignUpSuccess}
           onSignInSuccess={handleHeaderSignInSuccess}
+          showDashboard={showDashboard}
+          onDashboardClick={handleDashboardClick}
         />
         <main className="mt-16 md:mt-24">
-          <Hero />
+          {/* Only show Hero section if not authenticated */}
+          {!isAuthenticated && <Hero />}
           {!isAuthenticated && (
             <TimeLoggingBanner onLogTime={() => setIsTimeLoggingOpen(true)} />
           )}

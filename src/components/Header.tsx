@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserPlus, LogIn, LogOut, User } from 'lucide-react';
+import { UserPlus, LogIn, LogOut, User, Home, BarChart3 } from 'lucide-react';
 import HeaderSignUpModal from './HeaderSignUpModal';
 import SignInModal from './SignInModal';
 import { supabase } from '../lib/supabase';
@@ -7,9 +7,11 @@ import { supabase } from '../lib/supabase';
 interface HeaderProps {
   onSignUpSuccess?: () => void;
   onSignInSuccess?: () => void;
+  showDashboard?: boolean;
+  onDashboardClick?: () => void;
 }
 
-const Header = ({ onSignUpSuccess, onSignInSuccess }: HeaderProps) => {
+const Header = ({ onSignUpSuccess, onSignInSuccess, showDashboard, onDashboardClick }: HeaderProps) => {
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
   const [isSignInOpen, setIsSignInOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -76,10 +78,24 @@ const Header = ({ onSignUpSuccess, onSignInSuccess }: HeaderProps) => {
           <ul className="flex gap-6 items-center">
             {isAuthenticated ? (
               <>
-                <li className="hidden sm:block">
-                  <span className="text-black text-sm">
-                    Welcome, {userProfile?.display_name || userProfile?.full_name || 'User'}
-                  </span>
+                <li>
+                  <button 
+                    className="flex items-center gap-2 text-black hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
+                  >
+                    <Home size={16} />
+                    <span className="hidden sm:inline">feed</span>
+                  </button>
+                </li>
+                <li>
+                  <button 
+                    onClick={onDashboardClick}
+                    className={`flex items-center gap-2 text-black hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200 ${
+                      showDashboard ? 'bg-white bg-opacity-50' : ''
+                    }`}
+                  >
+                    <BarChart3 size={16} />
+                    <span className="hidden sm:inline">dashboard</span>
+                  </button>
                 </li>
                 <li>
                   <button 

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, User, CheckCircle, XCircle, Plus, LogOut, ArrowLeft, Mail, Phone, Edit } from 'lucide-react';
+import { Clock, User, CheckCircle, XCircle, Plus, LogOut, Mail, Phone, Edit } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import SignOutModal from './SignOutModal';
 import EditProfileModal from './EditProfileModal';
+import TimeLoggingModal from './TimeLoggingModal';
 import type { TimeLoggingData, Profile, ProfileUrl } from '../types';
 
 interface DashboardProps {
@@ -16,6 +17,7 @@ const Dashboard = ({ onBack }: DashboardProps) => {
   const [isLoggingTime, setIsLoggingTime] = useState(false);
   const [isSignOutModalOpen, setIsSignOutModalOpen] = useState(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [isTimeLoggingOpen, setIsTimeLoggingOpen] = useState(false);
   const [timeLogForm, setTimeLogForm] = useState({
     mode: 'helped' as 'helped' | 'wasHelped',
     hours: 1,
@@ -168,6 +170,19 @@ const Dashboard = ({ onBack }: DashboardProps) => {
     }
   };
 
+  const handleTimeLoggingFromModal = (timeLoggingData: TimeLoggingData) => {
+    // Since user is already signed in, we can directly set the form data
+    setTimeLogForm({
+      mode: timeLoggingData.mode,
+      hours: timeLoggingData.hours,
+      name: timeLoggingData.name,
+      contact: timeLoggingData.contact,
+      description: timeLoggingData.description
+    });
+    setIsTimeLoggingOpen(false);
+    // The form data is now ready for logging
+  };
+
   const timeOptions = [0.5, 1, 1.5, 2, 3, 4, 6, 8];
 
   return (
@@ -178,12 +193,10 @@ const Dashboard = ({ onBack }: DashboardProps) => {
           <div className="flex items-center gap-4">
             <button
               onClick={onBack}
-              className="flex items-center gap-2 text-black hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
+              className="text-2xl font-bold text-black italic hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
             >
-              <ArrowLeft size={16} />
-              <span className="hidden sm:inline">Back to Home</span>
+              yard
             </button>
-            <div className="text-2xl font-bold text-black italic">yard</div>
           </div>
           <button
             onClick={() => setIsSignOutModalOpen(true)}
@@ -368,7 +381,10 @@ const Dashboard = ({ onBack }: DashboardProps) => {
             <p className="text-gray-600 text-sm mb-4">
               Track time you've spent helping someone or request time back
             </p>
-            <button className="w-full bg-black text-white py-2 rounded-xl hover:bg-gray-800 transition-all duration-200">
+            <button 
+              onClick={() => setIsTimeLoggingOpen(true)}
+              className="w-full bg-black text-white py-2 rounded-xl hover:bg-gray-800 transition-all duration-200"
+            >
               Start Logging
             </button>
           </div>
@@ -422,6 +438,13 @@ const Dashboard = ({ onBack }: DashboardProps) => {
           onProfileUpdate={handleProfileUpdate}
         />
       )}
+
+      {/* Time Logging Modal */}
+      <TimeLoggingModal
+        isOpen={isTimeLoggingOpen}
+        onClose={() => setIsTimeLoggingOpen(false)}
+        onSignUp={handleTimeLoggingFromModal}
+      />
     </div>
   );
 };
