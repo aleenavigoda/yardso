@@ -56,14 +56,36 @@ const HeaderSignUpModal = ({ isOpen, onClose, onSignUpSuccess }: HeaderSignUpMod
     try {
       console.log('Starting sign up process...');
       
-      // Sign up with Supabase Auth
+      // First, store the profile data in pending_profiles table
+      const validUrls = formData.urls.filter(url => url.trim() !== '');
+      const urlsData = validUrls.map(url => ({
+        url: url.trim(),
+        type: detectUrlType(url.trim())
+      }));
+
+      const { error: pendingError } = await supabase
+        .from('pending_profiles')
+        .insert({
+          email: formData.email,
+          full_name: formData.fullName,
+          display_name: formData.fullName.split(' ')[0],
+          urls: urlsData
+        });
+
+      if (pendingError) {
+        console.error('Error storing pending profile:', pendingError);
+        throw pendingError;
+      }
+
+      console.log('Pending profile stored successfully');
+
+      // Now sign up with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
         password: formData.password,
         options: {
           data: {
             full_name: formData.fullName,
-            urls: formData.urls.filter(url => url.trim() !== '')
           }
         }
       });
@@ -82,8 +104,7 @@ const HeaderSignUpModal = ({ isOpen, onClose, onSignUpSuccess }: HeaderSignUpMod
       } else if (authData.user && authData.session) {
         console.log('User signed in immediately');
         // User is immediately signed in (email confirmation disabled)
-        // Profile will be created by trigger, but we need to add URLs
-        await handlePostSignupTasks(authData.user);
+        // Profile will be created by trigger with pending data
         onSignUpSuccess();
       } else {
         throw new Error('No user data returned from sign up');
@@ -93,58 +114,6 @@ const HeaderSignUpModal = ({ isOpen, onClose, onSignUpSuccess }: HeaderSignUpMod
       setError(err.message || 'An error occurred during sign up');
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handlePostSignupTasks = async (user: any) => {
-    try {
-      console.log('Handling post-signup tasks for user:', user.id);
-      
-      // Wait a moment for the trigger to create the profile
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Get the profile created by the trigger
-      const { data: profile, error: profileError } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-
-      if (profileError) {
-        console.error('Error fetching profile:', profileError);
-        throw profileError;
-      }
-
-      console.log('Profile found:', profile);
-
-      // Add URLs if provided
-      const validUrls = formData.urls.filter(url => url.trim() !== '');
-      if (validUrls.length > 0) {
-        console.log('Adding URLs:', validUrls);
-        const urlInserts = validUrls.map(url => ({
-          profile_id: profile.id,
-          url: url.trim(),
-          url_type: detectUrlType(url.trim()),
-        }));
-
-        const { error: urlError } = await supabase
-          .from('profile_urls')
-          .insert(urlInserts);
-
-        if (urlError) {
-          console.error('URL insertion error:', urlError);
-          // Don't throw here, URLs are optional
-        } else {
-          console.log('URLs added successfully');
-        }
-      }
-      
-      // Store user profile for dashboard
-      localStorage.setItem('userProfile', JSON.stringify(profile));
-      console.log('Post-signup tasks complete');
-    } catch (err: any) {
-      console.error('Error in post-signup tasks:', err);
-      // Don't throw here - the user is signed up, we just couldn't complete the extras
     }
   };
 
