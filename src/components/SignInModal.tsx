@@ -22,6 +22,8 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
     setError('');
 
     try {
+      console.log('Attempting sign in for:', formData.email);
+      
       // Sign in with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: formData.email.toLowerCase().trim(),
@@ -29,11 +31,16 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
       });
 
       if (authError) {
+        console.error('Auth error:', authError);
         throw authError;
       }
 
+      console.log('Auth successful, user ID:', authData.user?.id);
+
       if (authData.user) {
         // Get the user's profile - it should exist if they're signing in
+        console.log('Fetching profile for user:', authData.user.id);
+        
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
           .select('*')
@@ -41,6 +48,7 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
           .single();
 
         if (profileError) {
+          console.error('Profile error:', profileError);
           if (profileError.code === 'PGRST116') {
             // Profile doesn't exist - this shouldn't happen for existing users
             throw new Error('Profile not found. Please contact support or try signing up again.');
@@ -48,13 +56,20 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
           throw profileError;
         }
 
+        console.log('Profile found:', profile);
+
         // Store user profile for dashboard
         localStorage.setItem('userProfile', JSON.stringify(profile));
+        
+        // Reset form
+        setFormData({ email: '', password: '' });
+        
         onSignInSuccess();
       } else {
         throw new Error('No user data returned from sign in');
       }
     } catch (err: any) {
+      console.error('Sign in error:', err);
       setError(err.message || 'An error occurred during sign in');
     } finally {
       setIsLoading(false);
@@ -104,6 +119,7 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
                 placeholder="your@email.com"
                 className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200 text-sm"
                 required
+                disabled={isLoading}
               />
             </div>
 
@@ -119,6 +135,7 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
                 placeholder="Your password"
                 className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200 text-sm"
                 required
+                disabled={isLoading}
               />
             </div>
 

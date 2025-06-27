@@ -42,6 +42,8 @@ function App() {
 
   const createProfileFromPendingData = async (user: any) => {
     try {
+      console.log('Creating profile from pending data for:', user.email);
+      
       // Check for pending profile data
       const { data: pendingProfiles, error: pendingError } = await supabase
         .from('pending_profiles')
@@ -65,6 +67,7 @@ function App() {
 
       if (pendingProfiles && pendingProfiles.length > 0) {
         const pending = pendingProfiles[0];
+        console.log('Found pending profile:', pending.id);
         
         profileData = {
           ...profileData,
@@ -90,8 +93,11 @@ function App() {
         .single();
 
       if (profileError) {
+        console.error('Profile creation error:', profileError);
         throw profileError;
       }
+
+      console.log('Profile created:', newProfile.id);
 
       // Add URLs if any
       if (urlsToAdd.length > 0) {
@@ -107,6 +113,8 @@ function App() {
 
         if (urlError) {
           console.log('URL insertion error:', urlError.message);
+        } else {
+          console.log('Added URLs:', urlInserts.length);
         }
       }
 
@@ -116,6 +124,7 @@ function App() {
           .from('pending_profiles')
           .delete()
           .eq('id', pendingProfiles[0].id);
+        console.log('Cleaned up pending profile');
       }
 
       return newProfile;
@@ -127,6 +136,8 @@ function App() {
 
   const handleAuthSuccess = async (user: any) => {
     try {
+      console.log('Handling auth success for user:', user.id);
+      
       // Check if profile exists
       const { data: existingProfile, error: profileError } = await supabase
         .from('profiles')
@@ -135,13 +146,17 @@ function App() {
         .single();
 
       if (profileError && profileError.code !== 'PGRST116') {
+        console.error('Profile fetch error:', profileError);
         throw profileError;
       }
 
       let profile = existingProfile;
 
       if (!existingProfile) {
+        console.log('No existing profile found, creating new one');
         profile = await createProfileFromPendingData(user);
+      } else {
+        console.log('Using existing profile:', existingProfile.id);
       }
 
       localStorage.setItem('userProfile', JSON.stringify(profile));
@@ -161,6 +176,8 @@ function App() {
   useEffect(() => {
     const handleAuth = async () => {
       try {
+        console.log('Initializing auth...');
+        
         // Check for email confirmation tokens in URL hash
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const accessToken = hashParams.get('access_token');
@@ -169,6 +186,7 @@ function App() {
         const errorDescription = hashParams.get('error_description');
         
         if (error) {
+          console.log('Auth error from URL:', error, errorDescription);
           setAuthError(errorDescription || 'Authentication failed');
           setIsLoading(false);
           window.history.replaceState({}, document.title, window.location.pathname);
@@ -176,6 +194,7 @@ function App() {
         }
         
         if (accessToken && refreshToken) {
+          console.log('Found auth tokens in URL, setting session...');
           // Set the session from the URL tokens
           const { data, error: sessionError } = await supabase.auth.setSession({
             access_token: accessToken,
@@ -183,11 +202,14 @@ function App() {
           });
           
           if (sessionError) {
+            console.error('Session error:', sessionError);
             setAuthError('Failed to confirm your email. Please try signing in.');
             setIsLoading(false);
           } else if (data.user) {
+            console.log('Session set successfully');
             await handleAuthSuccess(data.user);
           } else {
+            console.log('No user data after setting session');
             setAuthError('Authentication failed - no user data');
             setIsLoading(false);
           }
@@ -197,9 +219,11 @@ function App() {
         }
 
         // Check for existing session on app load
+        console.log('Checking for existing session...');
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
+          console.error('Session error:', sessionError);
           setAuthError('Session error occurred');
           clearAuthState();
           setIsLoading(false);
@@ -207,8 +231,10 @@ function App() {
         }
         
         if (session) {
+          console.log('Found existing session');
           await handleAuthSuccess(session.user);
         } else {
+          console.log('No existing session found');
           setIsLoading(false);
         }
       } catch (error: any) {
@@ -223,6 +249,8 @@ function App() {
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('Auth state changed:', event, session?.user?.id || 'no user');
+      
       if (event === 'SIGNED_IN' && session) {
         await handleAuthSuccess(session.user);
       } else if (event === 'SIGNED_OUT') {
