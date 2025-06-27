@@ -28,6 +28,15 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
     setFormData({ ...formData, urls: newUrls });
   };
 
+  const detectUrlType = (url: string): string => {
+    if (url.includes('github.com')) return 'github';
+    if (url.includes('linkedin.com')) return 'linkedin';
+    if (url.includes('twitter.com') || url.includes('x.com')) return 'twitter';
+    if (url.includes('behance.net') || url.includes('dribbble.com')) return 'portfolio';
+    if (url.includes('medium.com') || url.includes('substack.com')) return 'article';
+    return 'website';
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -47,6 +56,8 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
     }
 
     try {
+      console.log('Starting sign up process...');
+      
       // Sign up with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email,
@@ -60,51 +71,62 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
         }
       });
 
-      if (authError) throw authError;
+      if (authError) {
+        console.error('Auth error:', authError);
+        throw authError;
+      }
+
+      console.log('Auth data:', authData);
 
       // If user has a session immediately, they're signed in (email confirmation disabled)
       if (authData.user && authData.session) {
-        await handleSuccessfulSignUp(authData.user);
+        console.log('User signed in immediately, creating profile...');
+        await createProfileForUser(authData.user);
         onSignUpSuccess();
-      } else {
+      } else if (authData.user) {
+        console.log('Email confirmation required');
         // Email confirmation required
         setShowConfirmation(true);
+      } else {
+        throw new Error('No user data returned from sign up');
       }
     } catch (err: any) {
+      console.error('Sign up error:', err);
       setError(err.message || 'An error occurred during sign up');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleSuccessfulSignUp = async (user: any) => {
+  const createProfileForUser = async (user: any) => {
     try {
+      console.log('Creating profile for user:', user.id);
+      
       // Create profile
-      const { error: profileError } = await supabase
+      const { data: newProfile, error: profileError } = await supabase
         .from('profiles')
         .insert({
           user_id: user.id,
           email: formData.email,
           full_name: formData.fullName,
           display_name: formData.fullName.split(' ')[0], // Use first name as display name
-        });
-
-      if (profileError) throw profileError;
-
-      // Get the created profile
-      const { data: profile, error: profileFetchError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('user_id', user.id)
+        })
+        .select()
         .single();
 
-      if (profileFetchError) throw profileFetchError;
+      if (profileError) {
+        console.error('Profile creation error:', profileError);
+        throw profileError;
+      }
+
+      console.log('Profile created:', newProfile);
 
       // Add URLs if provided
       const validUrls = formData.urls.filter(url => url.trim() !== '');
       if (validUrls.length > 0) {
+        console.log('Adding URLs:', validUrls);
         const urlInserts = validUrls.map(url => ({
-          profile_id: profile.id,
+          profile_id: newProfile.id,
           url: url.trim(),
           url_type: detectUrlType(url.trim()),
         }));
@@ -113,37 +135,35 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
           .from('profile_urls')
           .insert(urlInserts);
 
-        if (urlError) throw urlError;
+        if (urlError) {
+          console.error('URL insertion error:', urlError);
+          // Don't throw here, URLs are optional
+        } else {
+          console.log('URLs added successfully');
+        }
       }
 
       // Store time logging data and profile info for the dashboard
       if (timeLoggingData) {
         localStorage.setItem('pendingTimeLog', JSON.stringify({
           ...timeLoggingData,
-          profileId: profile.id
+          profileId: newProfile.id
         }));
       }
       
       localStorage.setItem('userProfile', JSON.stringify({
-        id: profile.id,
+        id: newProfile.id,
         user_id: user.id,
         email: formData.email,
         full_name: formData.fullName,
         display_name: formData.fullName.split(' ')[0]
       }));
+
+      console.log('Profile setup complete');
     } catch (err: any) {
       console.error('Error setting up profile:', err);
-      throw err;
+      throw new Error(`Failed to create your profile: ${err.message}`);
     }
-  };
-
-  const detectUrlType = (url: string): string => {
-    if (url.includes('github.com')) return 'github';
-    if (url.includes('linkedin.com')) return 'linkedin';
-    if (url.includes('twitter.com') || url.includes('x.com')) return 'twitter';
-    if (url.includes('behance.net') || url.includes('dribbble.com')) return 'portfolio';
-    if (url.includes('medium.com') || url.includes('substack.com')) return 'article';
-    return 'website';
   };
 
   if (!isOpen) return null;
