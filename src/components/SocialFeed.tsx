@@ -21,6 +21,7 @@ interface TimeTransaction {
     full_name: string;
     display_name: string;
   };
+  is_agent_transaction?: boolean;
 }
 
 interface GroupedTransaction {
@@ -41,6 +42,7 @@ interface GroupedTransaction {
   created_at: string;
   is_group: boolean;
   is_balanced?: boolean;
+  is_agent_transaction?: boolean;
 }
 
 const SocialFeed = () => {
@@ -53,8 +55,8 @@ const SocialFeed = () => {
 
   const loadTransactions = async () => {
     try {
-      // Get recent confirmed transactions with profile data
-      const { data: rawTransactions, error } = await supabase
+      // Get regular confirmed transactions with profile data
+      const { data: regularTransactions, error: regularError } = await supabase
         .from('time_transactions')
         .select(`
           id,
@@ -70,12 +72,48 @@ const SocialFeed = () => {
         `)
         .eq('status', 'confirmed')
         .order('created_at', { ascending: false })
-        .limit(20);
+        .limit(10);
 
-      if (error) throw error;
+      // Get agent transactions
+      const { data: agentTransactions, error: agentError } = await supabase
+        .from('agent_time_transactions')
+        .select(`
+          id,
+          giver_id,
+          receiver_id,
+          hours,
+          description,
+          service_type,
+          status,
+          created_at,
+          giver:agent_profiles!agent_time_transactions_giver_id_fkey(id, full_name, display_name),
+          receiver:agent_profiles!agent_time_transactions_receiver_id_fkey(id, full_name, display_name)
+        `)
+        .eq('status', 'confirmed')
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (regularError) {
+        console.error('Error loading regular transactions:', regularError);
+      }
+      
+      if (agentError) {
+        console.error('Error loading agent transactions:', agentError);
+      }
+
+      // Combine and mark agent transactions
+      const allTransactions: TimeTransaction[] = [
+        ...(regularTransactions || []),
+        ...(agentTransactions || []).map(t => ({ ...t, is_agent_transaction: true }))
+      ];
+
+      // Sort by created_at
+      allTransactions.sort((a, b) => 
+        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      );
 
       // Group transactions by giver, description, and time (within 1 hour)
-      const grouped = groupTransactions(rawTransactions || []);
+      const grouped = groupTransactions(allTransactions.slice(0, 20));
       
       // Check for balanced exchanges
       const withBalanceInfo = await addBalanceInfo(grouped);
@@ -110,7 +148,8 @@ const SocialFeed = () => {
           description: transaction.description,
           service_type: transaction.service_type,
           created_at: transaction.created_at,
-          is_group: false
+          is_group: false,
+          is_agent_transaction: transaction.is_agent_transaction
         };
       }
     });
@@ -124,8 +163,8 @@ const SocialFeed = () => {
     // For each transaction, check if there's a reciprocal transaction within 24 hours
     const withBalance = await Promise.all(
       transactions.map(async (transaction) => {
-        if (transaction.is_group) {
-          return transaction; // Skip balance check for group transactions
+        if (transaction.is_group || transaction.is_agent_transaction) {
+          return transaction; // Skip balance check for group transactions and agent transactions
         }
 
         const receiver = transaction.receivers[0];
@@ -201,7 +240,7 @@ const SocialFeed = () => {
 
   if (isLoading) {
     return (
-      <div className="bg-white rounded-3xl p-8 shadow-lg border border-amber-100">
+      <div className="bg-white rounded-3xl p-8 shadow-lg border border-amber-100 mb-8">
         <div className="flex items-center gap-3 mb-6">
           <TrendingUp className="w-5 h-5 text-amber-600" />
           <h2 className="font-semibold text-gray-900 text-lg">Recent Time Flows</h2>
@@ -224,7 +263,7 @@ const SocialFeed = () => {
   }
 
   return (
-    <div className="bg-white rounded-3xl p-8 shadow-lg border border-amber-100">
+    <div className="bg-white rounded-3xl p-8 shadow-lg border border-amber-100 mb-8">
       <div className="flex items-center gap-3 mb-6">
         <TrendingUp className="w-5 h-5 text-amber-600" />
         <h2 className="font-semibold text-gray-900 text-lg">Recent Time Flows</h2>
