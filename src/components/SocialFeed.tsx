@@ -21,7 +21,6 @@ interface TimeTransaction {
     full_name: string;
     display_name: string;
   };
-  is_agent_transaction?: boolean;
 }
 
 interface GroupedTransaction {
@@ -42,7 +41,6 @@ interface GroupedTransaction {
   created_at: string;
   is_group: boolean;
   is_balanced?: boolean;
-  is_agent_transaction?: boolean;
 }
 
 const SocialFeed = () => {
@@ -55,8 +53,8 @@ const SocialFeed = () => {
 
   const loadTransactions = async () => {
     try {
-      // Get regular confirmed transactions with profile data
-      const { data: regularTransactions, error: regularError } = await supabase
+      // Get recent confirmed transactions from regular users
+      const { data: userTransactions, error: userError } = await supabase
         .from('time_transactions')
         .select(`
           id,
@@ -74,7 +72,11 @@ const SocialFeed = () => {
         .order('created_at', { ascending: false })
         .limit(10);
 
-      // Get agent transactions
+      if (userError) {
+        console.error('Error loading user transactions:', userError);
+      }
+
+      // Get recent transactions from agent profiles
       const { data: agentTransactions, error: agentError } = await supabase
         .from('agent_time_transactions')
         .select(`
@@ -91,29 +93,20 @@ const SocialFeed = () => {
         `)
         .eq('status', 'confirmed')
         .order('created_at', { ascending: false })
-        .limit(10);
+        .limit(15);
 
-      if (regularError) {
-        console.error('Error loading regular transactions:', regularError);
-      }
-      
       if (agentError) {
         console.error('Error loading agent transactions:', agentError);
       }
 
-      // Combine and mark agent transactions
-      const allTransactions: TimeTransaction[] = [
-        ...(regularTransactions || []),
-        ...(agentTransactions || []).map(t => ({ ...t, is_agent_transaction: true }))
+      // Combine both sets of transactions
+      const allTransactions = [
+        ...(userTransactions || []),
+        ...(agentTransactions || [])
       ];
 
-      // Sort by created_at
-      allTransactions.sort((a, b) => 
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      );
-
       // Group transactions by giver, description, and time (within 1 hour)
-      const grouped = groupTransactions(allTransactions.slice(0, 20));
+      const grouped = groupTransactions(allTransactions);
       
       // Check for balanced exchanges
       const withBalanceInfo = await addBalanceInfo(grouped);
@@ -148,8 +141,7 @@ const SocialFeed = () => {
           description: transaction.description,
           service_type: transaction.service_type,
           created_at: transaction.created_at,
-          is_group: false,
-          is_agent_transaction: transaction.is_agent_transaction
+          is_group: false
         };
       }
     });
@@ -163,23 +155,40 @@ const SocialFeed = () => {
     // For each transaction, check if there's a reciprocal transaction within 24 hours
     const withBalance = await Promise.all(
       transactions.map(async (transaction) => {
-        if (transaction.is_group || transaction.is_agent_transaction) {
-          return transaction; // Skip balance check for group transactions and agent transactions
+        if (transaction.is_group) {
+          return transaction; // Skip balance check for group transactions
         }
 
         const receiver = transaction.receivers[0];
         
-        // Look for reciprocal transaction
-        const { data: reciprocal } = await supabase
+        // Look for reciprocal transaction in both regular and agent transactions
+        const timeRange = {
+          start: new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString(),
+          end: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+        };
+
+        // Check regular transactions
+        const { data: reciprocalUser } = await supabase
           .from('time_transactions')
           .select('hours')
           .eq('giver_id', receiver.id)
           .eq('receiver_id', transaction.giver.id)
           .eq('status', 'confirmed')
-          .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-          .lte('created_at', new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString());
+          .gte('created_at', timeRange.start)
+          .lte('created_at', timeRange.end);
 
-        const isBalanced = reciprocal && reciprocal.length > 0 && 
+        // Check agent transactions
+        const { data: reciprocalAgent } = await supabase
+          .from('agent_time_transactions')
+          .select('hours')
+          .eq('giver_id', receiver.id)
+          .eq('receiver_id', transaction.giver.id)
+          .eq('status', 'confirmed')
+          .gte('created_at', timeRange.start)
+          .lte('created_at', timeRange.end);
+
+        const reciprocal = [...(reciprocalUser || []), ...(reciprocalAgent || [])];
+        const isBalanced = reciprocal.length > 0 && 
           Math.abs(reciprocal[0].hours - transaction.hours) < 0.5;
 
         return {
@@ -307,7 +316,7 @@ const SocialFeed = () => {
 
             {/* Content */}
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <span className="font-medium text-gray-900">
                   {transaction.giver.display_name}
                 </span>
@@ -330,24 +339,10 @@ const SocialFeed = () => {
                     {transaction.receivers[0].display_name}
                   </span>
                 )}
-                {transaction.is_balanced && !transaction.is_group && (
-                  <span className="text-gray-600">for</span>
-                )}
-                {transaction.is_balanced && !transaction.is_group && (
-                  <span className={`font-medium ${getServiceTypeColor(transaction.service_type)}`}>
-                    {transaction.hours}h {getServiceTypeLabel(transaction.service_type)}
-                  </span>
-                )}
               </div>
               
               <div className="flex items-center gap-4 text-sm text-gray-500">
-                <span>{transaction.description}</span>
-                {transaction.is_balanced && !transaction.is_group && (
-                  <>
-                    <ArrowUpDown size={14} className="text-gray-400" />
-                    <span>Mobile app wireframes</span>
-                  </>
-                )}
+                <span>"{transaction.description}"</span>
                 <span>•</span>
                 <span>{formatTimeAgo(transaction.created_at)}</span>
               </div>
