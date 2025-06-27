@@ -1,54 +1,29 @@
-import React, { useState, useEffect } from 'react';
-import { UserPlus, LogIn, LogOut, User, Home, BarChart3 } from 'lucide-react';
+import React, { useState } from 'react';
+import { UserPlus, LogIn, LogOut, Home, BarChart3 } from 'lucide-react';
 import HeaderSignUpModal from './HeaderSignUpModal';
 import SignInModal from './SignInModal';
-import { supabase } from '../lib/supabase';
 
 interface HeaderProps {
+  isAuthenticated: boolean;
+  userProfile: any;
+  showDashboard: boolean;
   onSignUpSuccess?: () => void;
   onSignInSuccess?: () => void;
-  showDashboard?: boolean;
   onDashboardClick?: () => void;
+  onSignOut?: () => void;
 }
 
-const Header = ({ onSignUpSuccess, onSignInSuccess, showDashboard, onDashboardClick }: HeaderProps) => {
+const Header = ({ 
+  isAuthenticated, 
+  userProfile, 
+  showDashboard, 
+  onSignUpSuccess, 
+  onSignInSuccess, 
+  onDashboardClick, 
+  onSignOut 
+}: HeaderProps) => {
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
   const [isSignInOpen, setIsSignInOpen] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userProfile, setUserProfile] = useState<any>(null);
-
-  useEffect(() => {
-    // Check initial auth state
-    const checkAuthState = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setIsAuthenticated(!!session);
-      
-      if (session) {
-        const profile = localStorage.getItem('userProfile');
-        if (profile) {
-          setUserProfile(JSON.parse(profile));
-        }
-      }
-    };
-
-    checkAuthState();
-
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setIsAuthenticated(!!session);
-      
-      if (session) {
-        const profile = localStorage.getItem('userProfile');
-        if (profile) {
-          setUserProfile(JSON.parse(profile));
-        }
-      } else {
-        setUserProfile(null);
-      }
-    });
-
-    return () => subscription.unsubscribe();
-  }, []);
 
   const handleSignUpSuccess = () => {
     setIsSignUpOpen(false);
@@ -60,12 +35,8 @@ const Header = ({ onSignUpSuccess, onSignInSuccess, showDashboard, onDashboardCl
     onSignInSuccess?.();
   };
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    localStorage.removeItem('userProfile');
-    localStorage.removeItem('pendingTimeLog');
-    setUserProfile(null);
-    setIsAuthenticated(false);
+  const handleSignOut = () => {
+    onSignOut?.();
   };
 
   return (

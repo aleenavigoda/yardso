@@ -20,6 +20,7 @@ function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [authError, setAuthError] = useState<string | null>(null);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userProfile, setUserProfile] = useState<any>(null);
 
   // Clear authentication state and localStorage
   const clearAuthState = () => {
@@ -29,6 +30,7 @@ function App() {
     setPendingTimeLog(undefined);
     setAuthError(null);
     setIsAuthenticated(false);
+    setUserProfile(null);
   };
 
   const detectUrlType = (url: string): string => {
@@ -160,6 +162,7 @@ function App() {
       }
 
       localStorage.setItem('userProfile', JSON.stringify(profile));
+      setUserProfile(profile);
       setIsAuthenticated(true);
       setShowDashboard(true);
       setAuthError(null);
@@ -232,7 +235,16 @@ function App() {
         
         if (session) {
           console.log('Found existing session');
-          await handleAuthSuccess(session.user);
+          // Also check if we have profile in localStorage
+          const storedProfile = localStorage.getItem('userProfile');
+          if (storedProfile) {
+            const profile = JSON.parse(storedProfile);
+            setUserProfile(profile);
+            setIsAuthenticated(true);
+            setIsLoading(false);
+          } else {
+            await handleAuthSuccess(session.user);
+          }
         } else {
           console.log('No existing session found');
           setIsLoading(false);
@@ -292,6 +304,11 @@ function App() {
 
   const handleDashboardClick = () => {
     setShowDashboard(true);
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    clearAuthState();
   };
 
   const handleRetry = () => {
@@ -364,10 +381,13 @@ function App() {
     <div className="min-h-screen w-full bg-amber-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         <Header 
+          isAuthenticated={isAuthenticated}
+          userProfile={userProfile}
+          showDashboard={showDashboard}
           onSignUpSuccess={handleHeaderSignUpSuccess}
           onSignInSuccess={handleHeaderSignInSuccess}
-          showDashboard={showDashboard}
           onDashboardClick={handleDashboardClick}
+          onSignOut={handleSignOut}
         />
         <main className="mt-16 md:mt-24">
           {/* Only show Hero section if not authenticated */}
