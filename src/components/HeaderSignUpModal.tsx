@@ -56,40 +56,44 @@ const HeaderSignUpModal = ({ isOpen, onClose, onSignUpSuccess }: HeaderSignUpMod
     try {
       console.log('Starting sign up process...');
       
-      // First, store the profile data in pending_profiles table
+      // Prepare URLs data
       const validUrls = formData.urls.filter(url => url.trim() !== '');
       const urlsData = validUrls.map(url => ({
         url: url.trim(),
         type: detectUrlType(url.trim())
       }));
 
+      // First, store pending profile data
       const pendingProfileData = {
-        email: formData.email,
-        full_name: formData.fullName,
-        display_name: formData.fullName.split(' ')[0],
+        email: formData.email.toLowerCase().trim(),
+        full_name: formData.fullName.trim(),
+        display_name: formData.fullName.trim().split(' ')[0],
         urls: urlsData
       };
 
-      console.log('Storing pending profile data:', pendingProfileData);
+      console.log('Inserting pending profile:', pendingProfileData);
 
-      const { error: pendingError } = await supabase
+      // Insert into pending_profiles table
+      const { data: pendingProfile, error: pendingError } = await supabase
         .from('pending_profiles')
-        .insert(pendingProfileData);
+        .insert(pendingProfileData)
+        .select()
+        .single();
 
       if (pendingError) {
-        console.error('Error storing pending profile:', pendingError);
-        throw new Error(`Database error saving new user: ${pendingError.message}`);
+        console.error('Pending profile error:', pendingError);
+        throw new Error(`Failed to save profile data: ${pendingError.message}`);
       }
 
-      console.log('Pending profile stored successfully');
+      console.log('Pending profile created:', pendingProfile);
 
       // Now sign up with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: formData.email,
+        email: formData.email.toLowerCase().trim(),
         password: formData.password,
         options: {
           data: {
-            full_name: formData.fullName
+            full_name: formData.fullName.trim()
           }
         }
       });
@@ -97,7 +101,7 @@ const HeaderSignUpModal = ({ isOpen, onClose, onSignUpSuccess }: HeaderSignUpMod
       if (authError) {
         console.error('Auth error:', authError);
         // Clean up pending profile if auth fails
-        await supabase.from('pending_profiles').delete().eq('email', formData.email);
+        await supabase.from('pending_profiles').delete().eq('email', formData.email.toLowerCase().trim());
         throw authError;
       }
 
@@ -109,8 +113,6 @@ const HeaderSignUpModal = ({ isOpen, onClose, onSignUpSuccess }: HeaderSignUpMod
         setShowConfirmation(true);
       } else if (authData.user && authData.session) {
         console.log('User signed in immediately');
-        // User is immediately signed in (email confirmation disabled)
-        // Profile will be created by trigger with pending data
         onSignUpSuccess();
       } else {
         throw new Error('No user data returned from sign up');
