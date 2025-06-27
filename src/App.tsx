@@ -122,6 +122,16 @@ function App() {
     }
   };
 
+  // Create a timeout promise
+  const withTimeout = <T,>(promise: Promise<T>, timeoutMs: number): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<T>((_, reject) => 
+        setTimeout(() => reject(new Error(`Operation timed out after ${timeoutMs}ms`)), timeoutMs)
+      )
+    ]);
+  };
+
   // Handle email confirmation and auth state changes
   useEffect(() => {
     const handleAuth = async () => {
@@ -146,11 +156,13 @@ function App() {
         
         if (accessToken && refreshToken) {
           addDebugInfo('Found auth tokens in URL, setting session...');
-          // Set the session from the URL tokens
-          const { data, error: sessionError } = await supabase.auth.setSession({
+          // Set the session from the URL tokens with timeout
+          const sessionPromise = supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken
           });
+          
+          const { data, error: sessionError } = await withTimeout(sessionPromise, 10000);
           
           if (sessionError) {
             addDebugInfo(`Error setting session: ${sessionError.message}`);
@@ -170,13 +182,18 @@ function App() {
           return;
         }
 
-        // Check for existing session on app load
+        // Check for existing session on app load with timeout
         addDebugInfo('Checking for existing session...');
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        const sessionPromise = supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await withTimeout(sessionPromise, 8000);
         
         if (sessionError) {
           addDebugInfo(`Session error: ${sessionError.message}`);
-          setAuthError('Session error occurred');
+          if (sessionError.message.includes('timed out')) {
+            setAuthError('Connection timeout. Please check your internet connection and try again.');
+          } else {
+            setAuthError('Session error occurred');
+          }
           clearAuthState();
           setIsLoading(false);
           return;
@@ -191,7 +208,11 @@ function App() {
         }
       } catch (error: any) {
         addDebugInfo(`Auth initialization error: ${error.message}`);
-        setAuthError(`Failed to initialize authentication: ${error.message}`);
+        if (error.message.includes('timed out')) {
+          setAuthError('Connection timeout. Please check your internet connection and try again.');
+        } else {
+          setAuthError(`Failed to initialize authentication: ${error.message}`);
+        }
         clearAuthState();
         setIsLoading(false);
       }
@@ -250,6 +271,12 @@ function App() {
     window.location.reload();
   };
 
+  const handleSkipAuth = () => {
+    setAuthError(null);
+    clearAuthState();
+    setIsLoading(false);
+  };
+
   // Show loading state while checking auth
   if (isLoading) {
     return (
@@ -260,12 +287,22 @@ function App() {
           
           {/* Debug info for development */}
           {debugInfo.length > 0 && (
-            <div className="bg-white rounded-lg p-4 text-left text-xs text-gray-600 max-h-40 overflow-y-auto">
+            <div className="bg-white rounded-lg p-4 text-left text-xs text-gray-600 max-h-40 overflow-y-auto mb-4">
               <div className="font-semibold mb-2">Debug Info:</div>
               {debugInfo.map((info, index) => (
                 <div key={index} className="mb-1">{info}</div>
               ))}
             </div>
+          )}
+          
+          {/* Add a skip button after 5 seconds */}
+          {debugInfo.length > 2 && (
+            <button
+              onClick={handleSkipAuth}
+              className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
+            >
+              Skip Authentication
+            </button>
           )}
         </div>
       </div>
@@ -300,11 +337,7 @@ function App() {
                 Try Again
               </button>
               <button
-                onClick={() => {
-                  setAuthError(null);
-                  clearAuthState();
-                  setIsLoading(false);
-                }}
+                onClick={handleSkipAuth}
                 className="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
               >
                 Continue as Guest
