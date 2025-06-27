@@ -15,22 +15,38 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
+
+  const addDebugInfo = (info: string) => {
+    console.log('SIGNIN DEBUG:', info);
+    setDebugInfo(prev => [...prev, `${new Date().toLocaleTimeString()}: ${info}`]);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
+    setDebugInfo([]);
 
     try {
+      addDebugInfo('Starting sign in process...');
+      
       // Sign in with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: formData.email,
+        email: formData.email.toLowerCase().trim(),
         password: formData.password,
       });
 
-      if (authError) throw authError;
+      if (authError) {
+        addDebugInfo(`Auth error: ${authError.message}`);
+        throw authError;
+      }
+
+      addDebugInfo(`Auth successful. User ID: ${authData.user?.id}`);
 
       if (authData.user) {
+        addDebugInfo('Fetching user profile...');
+        
         // Get the user's profile
         const { data: profile, error: profileError } = await supabase
           .from('profiles')
@@ -38,14 +54,47 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
           .eq('user_id', authData.user.id)
           .single();
 
-        if (profileError) throw profileError;
+        if (profileError) {
+          addDebugInfo(`Profile error: ${profileError.message}`);
+          
+          if (profileError.code === 'PGRST116') {
+            // Profile doesn't exist, create it
+            addDebugInfo('Profile not found, creating basic profile...');
+            
+            const { data: newProfile, error: createError } = await supabase
+              .from('profiles')
+              .insert({
+                user_id: authData.user.id,
+                email: authData.user.email || '',
+                full_name: authData.user.user_metadata?.full_name || '',
+                display_name: authData.user.user_metadata?.full_name?.split(' ')[0] || ''
+              })
+              .select()
+              .single();
 
-        // Store user profile for dashboard
-        localStorage.setItem('userProfile', JSON.stringify(profile));
+            if (createError) {
+              addDebugInfo(`Profile creation error: ${createError.message}`);
+              throw createError;
+            }
 
+            addDebugInfo(`Profile created: ${newProfile.id}`);
+            localStorage.setItem('userProfile', JSON.stringify(newProfile));
+          } else {
+            throw profileError;
+          }
+        } else {
+          addDebugInfo(`Profile found: ${profile.id}`);
+          localStorage.setItem('userProfile', JSON.stringify(profile));
+        }
+
+        addDebugInfo('Sign in successful, redirecting...');
         onSignInSuccess();
+      } else {
+        addDebugInfo('No user data returned');
+        throw new Error('No user data returned from sign in');
       }
     } catch (err: any) {
+      addDebugInfo(`Error: ${err.message}`);
       setError(err.message || 'An error occurred during sign in');
     } finally {
       setIsLoading(false);
@@ -79,6 +128,16 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
           {error && (
             <div className="bg-red-50 rounded-xl p-3 border border-red-200">
               <p className="text-red-800 text-sm">{error}</p>
+            </div>
+          )}
+
+          {/* Debug info for development */}
+          {debugInfo.length > 0 && (
+            <div className="bg-gray-50 rounded-xl p-3 text-left text-xs text-gray-600 max-h-32 overflow-y-auto">
+              <div className="font-semibold mb-2">Debug Info:</div>
+              {debugInfo.map((info, index) => (
+                <div key={index} className="mb-1">{info}</div>
+              ))}
             </div>
           )}
 

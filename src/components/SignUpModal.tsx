@@ -83,7 +83,20 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
         time_logging_data: timeLoggingData || null
       };
 
-      addDebugInfo('Inserting pending profile data...');
+      addDebugInfo('Attempting to insert pending profile data...');
+
+      // Test database connection first
+      const { data: testData, error: testError } = await supabase
+        .from('pending_profiles')
+        .select('count')
+        .limit(1);
+
+      if (testError) {
+        addDebugInfo(`Database connection test failed: ${testError.message}`);
+        throw new Error(`Database connection failed: ${testError.message}`);
+      }
+
+      addDebugInfo('Database connection successful');
 
       // Insert into pending_profiles table
       const { data: pendingProfile, error: pendingError } = await supabase
@@ -94,6 +107,8 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
 
       if (pendingError) {
         addDebugInfo(`Pending profile error: ${pendingError.message}`);
+        addDebugInfo(`Error code: ${pendingError.code}`);
+        addDebugInfo(`Error details: ${JSON.stringify(pendingError.details)}`);
         throw new Error(`Failed to save profile data: ${pendingError.message}`);
       }
 
