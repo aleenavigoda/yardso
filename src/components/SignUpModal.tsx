@@ -78,15 +78,20 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
 
       console.log('Auth data:', authData);
 
-      // If user has a session immediately, they're signed in (email confirmation disabled)
-      if (authData.user && authData.session) {
-        console.log('User signed in immediately, creating profile...');
-        await createProfileForUser(authData.user);
-        onSignUpSuccess();
-      } else if (authData.user) {
+      // Check if email confirmation is required
+      if (authData.user && !authData.session) {
         console.log('Email confirmation required');
-        // Email confirmation required
+        // Store time logging data for after confirmation
+        if (timeLoggingData) {
+          localStorage.setItem('pendingTimeLogSignup', JSON.stringify(timeLoggingData));
+        }
         setShowConfirmation(true);
+      } else if (authData.user && authData.session) {
+        console.log('User signed in immediately');
+        // User is immediately signed in (email confirmation disabled)
+        // Profile will be created by trigger, but we need to add URLs and handle time logging
+        await handlePostSignupTasks(authData.user);
+        onSignUpSuccess();
       } else {
         throw new Error('No user data returned from sign up');
       }
@@ -98,35 +103,33 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
     }
   };
 
-  const createProfileForUser = async (user: any) => {
+  const handlePostSignupTasks = async (user: any) => {
     try {
-      console.log('Creating profile for user:', user.id);
+      console.log('Handling post-signup tasks for user:', user.id);
       
-      // Create profile
-      const { data: newProfile, error: profileError } = await supabase
+      // Wait a moment for the trigger to create the profile
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
+      // Get the profile created by the trigger
+      const { data: profile, error: profileError } = await supabase
         .from('profiles')
-        .insert({
-          user_id: user.id,
-          email: formData.email,
-          full_name: formData.fullName,
-          display_name: formData.fullName.split(' ')[0], // Use first name as display name
-        })
-        .select()
+        .select('*')
+        .eq('user_id', user.id)
         .single();
 
       if (profileError) {
-        console.error('Profile creation error:', profileError);
+        console.error('Error fetching profile:', profileError);
         throw profileError;
       }
 
-      console.log('Profile created:', newProfile);
+      console.log('Profile found:', profile);
 
       // Add URLs if provided
       const validUrls = formData.urls.filter(url => url.trim() !== '');
       if (validUrls.length > 0) {
         console.log('Adding URLs:', validUrls);
         const urlInserts = validUrls.map(url => ({
-          profile_id: newProfile.id,
+          profile_id: profile.id,
           url: url.trim(),
           url_type: detectUrlType(url.trim()),
         }));
@@ -147,22 +150,15 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
       if (timeLoggingData) {
         localStorage.setItem('pendingTimeLog', JSON.stringify({
           ...timeLoggingData,
-          profileId: newProfile.id
+          profileId: profile.id
         }));
       }
       
-      localStorage.setItem('userProfile', JSON.stringify({
-        id: newProfile.id,
-        user_id: user.id,
-        email: formData.email,
-        full_name: formData.fullName,
-        display_name: formData.fullName.split(' ')[0]
-      }));
-
-      console.log('Profile setup complete');
+      localStorage.setItem('userProfile', JSON.stringify(profile));
+      console.log('Post-signup tasks complete');
     } catch (err: any) {
-      console.error('Error setting up profile:', err);
-      throw new Error(`Failed to create your profile: ${err.message}`);
+      console.error('Error in post-signup tasks:', err);
+      // Don't throw here - the user is signed up, we just couldn't complete the extras
     }
   };
 
