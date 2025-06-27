@@ -21,6 +21,12 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [showConfirmation, setShowConfirmation] = useState(false);
+  const [debugInfo, setDebugInfo] = useState<string[]>([]);
+
+  const addDebugInfo = (info: string) => {
+    console.log('SIGNUP DEBUG:', info);
+    setDebugInfo(prev => [...prev, `${new Date().toLocaleTimeString()}: ${info}`]);
+  };
 
   const handleUrlChange = (index: number, value: string) => {
     const newUrls = [...formData.urls];
@@ -41,6 +47,7 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
     e.preventDefault();
     setIsLoading(true);
     setError('');
+    setDebugInfo([]);
 
     // Validate passwords match
     if (formData.password !== formData.confirmPassword) {
@@ -56,12 +63,16 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
     }
 
     try {
+      addDebugInfo('Starting signup process...');
+      
       // Prepare URLs data
       const validUrls = formData.urls.filter(url => url.trim() !== '');
       const urlsData = validUrls.map(url => ({
         url: url.trim(),
         type: detectUrlType(url.trim())
       }));
+
+      addDebugInfo(`Prepared ${urlsData.length} URLs`);
 
       // Store pending profile data
       const pendingProfileData = {
@@ -72,16 +83,25 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
         time_logging_data: timeLoggingData || null
       };
 
+      addDebugInfo('Inserting pending profile data...');
+
       // Insert into pending_profiles table
-      const { error: pendingError } = await supabase
+      const { data: pendingProfile, error: pendingError } = await supabase
         .from('pending_profiles')
-        .insert(pendingProfileData);
+        .insert(pendingProfileData)
+        .select()
+        .single();
 
       if (pendingError) {
+        addDebugInfo(`Pending profile error: ${pendingError.message}`);
         throw new Error(`Failed to save profile data: ${pendingError.message}`);
       }
 
+      addDebugInfo(`Pending profile created with ID: ${pendingProfile.id}`);
+
       // Sign up with Supabase Auth
+      addDebugInfo('Starting Supabase Auth signup...');
+      
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email.toLowerCase().trim(),
         password: formData.password,
@@ -93,21 +113,28 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
       });
 
       if (authError) {
+        addDebugInfo(`Auth error: ${authError.message}`);
         // Clean up pending profile if auth fails
         await supabase.from('pending_profiles').delete().eq('email', formData.email.toLowerCase().trim());
         throw authError;
       }
 
+      addDebugInfo(`Auth signup successful. User ID: ${authData.user?.id}`);
+      addDebugInfo(`Session exists: ${!!authData.session}`);
+
       // Check if email confirmation is required
       if (authData.user && !authData.session) {
+        addDebugInfo('Email confirmation required');
         setShowConfirmation(true);
       } else if (authData.user && authData.session) {
-        // User is immediately signed in (email confirmation disabled)
+        addDebugInfo('User signed in immediately');
         onSignUpSuccess();
       } else {
+        addDebugInfo('No user data returned');
         throw new Error('No user data returned from sign up');
       }
     } catch (err: any) {
+      addDebugInfo(`Error: ${err.message}`);
       setError(err.message || 'An error occurred during sign up');
     } finally {
       setIsLoading(false);
@@ -198,6 +225,16 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
           {error && (
             <div className="bg-red-50 rounded-xl p-3 border border-red-200">
               <p className="text-red-800 text-sm">{error}</p>
+            </div>
+          )}
+
+          {/* Debug info for development */}
+          {debugInfo.length > 0 && (
+            <div className="bg-gray-50 rounded-xl p-3 text-left text-xs text-gray-600 max-h-32 overflow-y-auto">
+              <div className="font-semibold mb-2">Debug Info:</div>
+              {debugInfo.map((info, index) => (
+                <div key={index} className="mb-1">{info}</div>
+              ))}
             </div>
           )}
 
