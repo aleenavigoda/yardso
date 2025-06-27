@@ -17,6 +17,7 @@ function App() {
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
   const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | undefined>();
+  const [isLoading, setIsLoading] = useState(true);
 
   // Clear authentication state and localStorage
   const clearAuthState = () => {
@@ -28,20 +29,53 @@ function App() {
 
   // Handle email confirmation and auth state changes
   useEffect(() => {
-    // Check for existing session on app load
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        console.error('Session error:', error);
-        clearAuthState();
-        return;
-      }
-      
-      if (session) {
-        handleAuthSuccess(session.user);
-      }
-    });
+    const handleAuth = async () => {
+      try {
+        // Handle email confirmation from URL hash
+        const hashParams = new URLSearchParams(window.location.hash.substring(1));
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        
+        if (accessToken && refreshToken) {
+          // Set the session from the URL tokens
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken
+          });
+          
+          if (error) {
+            console.error('Error setting session:', error);
+          } else if (data.user) {
+            await handleAuthSuccess(data.user);
+            // Clean up the URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+            return;
+          }
+        }
 
-    // Listen for auth state changes (including email confirmation)
+        // Check for existing session on app load
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Session error:', error);
+          clearAuthState();
+          return;
+        }
+        
+        if (session) {
+          await handleAuthSuccess(session.user);
+        }
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+        clearAuthState();
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    handleAuth();
+
+    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session) {
         await handleAuthSuccess(session.user);
@@ -150,6 +184,18 @@ function App() {
   const handleHeaderSignInSuccess = () => {
     setShowDashboard(true);
   };
+
+  // Show loading state while checking auth
+  if (isLoading) {
+    return (
+      <div className="min-h-screen w-full bg-amber-200 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-2xl font-bold text-black italic mb-2">yard</div>
+          <div className="text-gray-700">Loading...</div>
+        </div>
+      </div>
+    );
+  }
 
   // Show dashboard if user just signed up or signed in
   if (showDashboard) {
