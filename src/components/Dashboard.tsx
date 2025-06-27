@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, User, CheckCircle, XCircle, Plus, LogOut, ArrowLeft, Mail, Phone } from 'lucide-react';
+import { Clock, User, CheckCircle, XCircle, Plus, LogOut, ArrowLeft, Mail, Phone, Edit } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import type { TimeLoggingData, Profile } from '../types';
+import SignOutModal from './SignOutModal';
+import EditProfileModal from './EditProfileModal';
+import type { TimeLoggingData, Profile, ProfileUrl } from '../types';
 
 interface DashboardProps {
   onBack: () => void;
@@ -9,8 +11,11 @@ interface DashboardProps {
 
 const Dashboard = ({ onBack }: DashboardProps) => {
   const [profile, setProfile] = useState<Profile | null>(null);
+  const [profileUrls, setProfileUrls] = useState<ProfileUrl[]>([]);
   const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | null>(null);
   const [isLoggingTime, setIsLoggingTime] = useState(false);
+  const [isSignOutModalOpen, setIsSignOutModalOpen] = useState(false);
+  const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [timeLogForm, setTimeLogForm] = useState({
     mode: 'helped' as 'helped' | 'wasHelped',
     hours: 1,
@@ -20,10 +25,26 @@ const Dashboard = ({ onBack }: DashboardProps) => {
   });
 
   useEffect(() => {
+    loadProfileData();
+  }, []);
+
+  const loadProfileData = async () => {
     // Load user profile from localStorage
     const userProfile = localStorage.getItem('userProfile');
     if (userProfile) {
-      setProfile(JSON.parse(userProfile));
+      const profileData = JSON.parse(userProfile);
+      setProfile(profileData);
+      
+      // Load profile URLs from database
+      const { data: urls } = await supabase
+        .from('profile_urls')
+        .select('*')
+        .eq('profile_id', profileData.id)
+        .order('created_at', { ascending: true });
+      
+      if (urls) {
+        setProfileUrls(urls);
+      }
     }
 
     // Load pending time log from localStorage
@@ -39,7 +60,7 @@ const Dashboard = ({ onBack }: DashboardProps) => {
         description: logData.description
       });
     }
-  }, []);
+  };
 
   const isValidEmail = (email: string) => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -116,7 +137,35 @@ const Dashboard = ({ onBack }: DashboardProps) => {
     await supabase.auth.signOut();
     localStorage.removeItem('userProfile');
     localStorage.removeItem('pendingTimeLog');
+    setIsSignOutModalOpen(false);
     onBack();
+  };
+
+  const handleProfileUpdate = async () => {
+    // Reload profile data after update
+    if (profile) {
+      const { data: updatedProfile } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', profile.id)
+        .single();
+      
+      if (updatedProfile) {
+        setProfile(updatedProfile);
+        localStorage.setItem('userProfile', JSON.stringify(updatedProfile));
+      }
+      
+      // Reload URLs
+      const { data: urls } = await supabase
+        .from('profile_urls')
+        .select('*')
+        .eq('profile_id', profile.id)
+        .order('created_at', { ascending: true });
+      
+      if (urls) {
+        setProfileUrls(urls);
+      }
+    }
   };
 
   const timeOptions = [0.5, 1, 1.5, 2, 3, 4, 6, 8];
@@ -137,7 +186,7 @@ const Dashboard = ({ onBack }: DashboardProps) => {
             <div className="text-2xl font-bold text-black italic">yard</div>
           </div>
           <button
-            onClick={handleSignOut}
+            onClick={() => setIsSignOutModalOpen(true)}
             className="flex items-center gap-2 text-black hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
           >
             <LogOut size={16} />
@@ -147,19 +196,61 @@ const Dashboard = ({ onBack }: DashboardProps) => {
 
         {/* Welcome Section */}
         <div className="bg-white rounded-3xl p-8 shadow-lg mb-8 border border-amber-100">
-          <div className="flex items-center gap-4 mb-4">
-            <div className="bg-amber-100 w-12 h-12 rounded-full flex items-center justify-center">
-              <User className="w-6 h-6 text-amber-700" />
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center gap-4">
+              <div className="bg-amber-100 w-12 h-12 rounded-full flex items-center justify-center">
+                <User className="w-6 h-6 text-amber-700" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">
+                  Welcome to your workyard, {profile?.display_name || profile?.full_name}!
+                </h1>
+                <p className="text-gray-600">
+                  Your professional time tracking and networking hub
+                </p>
+              </div>
             </div>
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">
-                Welcome to your workyard, {profile?.display_name || profile?.full_name}!
-              </h1>
-              <p className="text-gray-600">
-                Your professional time tracking and networking hub
-              </p>
-            </div>
+            <button
+              onClick={() => setIsEditProfileOpen(true)}
+              className="flex items-center gap-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 px-3 py-2 rounded-lg transition-all duration-200"
+            >
+              <Edit size={16} />
+              <span className="hidden sm:inline">Edit Profile</span>
+            </button>
           </div>
+
+          {/* Profile Info */}
+          {(profile?.bio || profileUrls.length > 0) && (
+            <div className="border-t border-gray-100 pt-4">
+              {profile?.bio && (
+                <p className="text-gray-700 mb-3">{profile.bio}</p>
+              )}
+              {profile?.location && (
+                <p className="text-gray-600 text-sm mb-3">📍 {profile.location}</p>
+              )}
+              {profileUrls.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {profileUrls.map((profileUrl) => (
+                    <a
+                      key={profileUrl.id}
+                      href={profileUrl.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-sm text-amber-700 hover:text-amber-800 bg-amber-50 hover:bg-amber-100 px-2 py-1 rounded-lg transition-all duration-200"
+                    >
+                      {profileUrl.url_type === 'github' && '🔗'}
+                      {profileUrl.url_type === 'linkedin' && '💼'}
+                      {profileUrl.url_type === 'twitter' && '🐦'}
+                      {profileUrl.url_type === 'portfolio' && '🎨'}
+                      {profileUrl.url_type === 'article' && '📝'}
+                      {profileUrl.url_type === 'website' && '🌐'}
+                      {profileUrl.url_type.charAt(0).toUpperCase() + profileUrl.url_type.slice(1)}
+                    </a>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Pending Time Log */}
@@ -312,6 +403,25 @@ const Dashboard = ({ onBack }: DashboardProps) => {
           </div>
         </div>
       </div>
+
+      {/* Sign Out Modal */}
+      <SignOutModal
+        isOpen={isSignOutModalOpen}
+        onClose={() => setIsSignOutModalOpen(false)}
+        onConfirm={handleSignOut}
+        userName={profile?.display_name || profile?.full_name}
+      />
+
+      {/* Edit Profile Modal */}
+      {profile && (
+        <EditProfileModal
+          isOpen={isEditProfileOpen}
+          onClose={() => setIsEditProfileOpen(false)}
+          profile={profile}
+          profileUrls={profileUrls}
+          onProfileUpdate={handleProfileUpdate}
+        />
+      )}
     </div>
   );
 };
