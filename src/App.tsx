@@ -280,6 +280,61 @@ function App() {
     setIsSignUpOpen(true);
   };
 
+  const handleTimeLoggingDirect = async (timeLoggingData: TimeLoggingData) => {
+    if (!userProfile) return;
+
+    try {
+      const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+      // Check if the contact is an existing user
+      const { data: existingProfile, error: profileError } = await supabase
+        .from('profiles')
+        .select('id, user_id, email, full_name')
+        .eq('email', timeLoggingData.contact)
+        .single();
+
+      if (existingProfile) {
+        // User exists - create direct time transaction
+        const { error: transactionError } = await supabase
+          .from('time_transactions')
+          .insert({
+            giver_id: timeLoggingData.mode === 'helped' ? userProfile.id : existingProfile.id,
+            receiver_id: timeLoggingData.mode === 'helped' ? existingProfile.id : userProfile.id,
+            hours: timeLoggingData.hours,
+            description: timeLoggingData.description,
+            logged_by: userProfile.id,
+            status: 'pending'
+          });
+
+        if (transactionError) throw transactionError;
+
+        alert('Time logged successfully! The other person will be notified to confirm.');
+      } else {
+        // User doesn't exist - create invitation and pending time log
+        const { data: invitationData, error: invitationError } = await supabase
+          .rpc('create_invitation_with_time_log', {
+            p_inviter_profile_id: userProfile.id,
+            p_invitee_email: isValidEmail(timeLoggingData.contact) ? timeLoggingData.contact : '',
+            p_invitee_name: timeLoggingData.name,
+            p_invitee_contact: timeLoggingData.contact,
+            p_hours: timeLoggingData.hours,
+            p_description: timeLoggingData.description,
+            p_service_type: 'general',
+            p_mode: timeLoggingData.mode
+          });
+
+        if (invitationError) throw invitationError;
+
+        alert(`Invitation sent to ${timeLoggingData.name}! They'll receive an email to join Yard and confirm the time log.`);
+      }
+
+      setIsTimeLoggingOpen(false);
+    } catch (error) {
+      console.error('Error logging time:', error);
+      alert('Error logging time. Please try again.');
+    }
+  };
+
   const handleSignUpSuccess = () => {
     setIsSignUpOpen(false);
     setPendingTimeLog(undefined);
@@ -392,9 +447,10 @@ function App() {
         <main className="mt-16 md:mt-24">
           {/* Only show Hero section if not authenticated */}
           {!isAuthenticated && <Hero />}
-          {!isAuthenticated && (
-            <TimeLoggingBanner onLogTime={() => setIsTimeLoggingOpen(true)} />
-          )}
+          
+          {/* Show time logging banner for both authenticated and non-authenticated users */}
+          <TimeLoggingBanner onLogTime={() => setIsTimeLoggingOpen(true)} />
+          
           <SearchForm
             searchValue={searchValue}
             setSearchValue={setSearchValue}
@@ -408,6 +464,8 @@ function App() {
         isOpen={isTimeLoggingOpen}
         onClose={() => setIsTimeLoggingOpen(false)}
         onSignUp={handleTimeLoggingSignUp}
+        onLogTime={handleTimeLoggingDirect}
+        isAuthenticated={isAuthenticated}
       />
       
       <SignUpModal

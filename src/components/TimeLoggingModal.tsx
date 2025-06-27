@@ -1,23 +1,26 @@
 import React, { useState } from 'react';
-import { X, Clock, User, MessageSquare, Plus, Minus } from 'lucide-react';
+import { X, Clock, User, MessageSquare, Plus, Minus, CheckCircle } from 'lucide-react';
 import type { TimeLoggingData } from '../types';
 
 interface TimeLoggingModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSignUp: (data: TimeLoggingData) => void;
+  onLogTime?: (data: TimeLoggingData) => void;
+  isAuthenticated?: boolean;
 }
 
-const TimeLoggingModal = ({ isOpen, onClose, onSignUp }: TimeLoggingModalProps) => {
+const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticated = false }: TimeLoggingModalProps) => {
   const [mode, setMode] = useState<'helped' | 'wasHelped'>('helped');
   const [hours, setHours] = useState(1);
   const [name, setName] = useState('');
   const [contact, setContact] = useState('');
   const [description, setDescription] = useState('');
+  const [isLogging, setIsLogging] = useState(false);
 
   const timeOptions = [0.5, 1, 1.5, 2, 3, 4, 6, 8];
 
-  const handleSignUpToLogTime = () => {
+  const handleSubmit = async () => {
     const timeLoggingData: TimeLoggingData = {
       mode,
       hours,
@@ -25,8 +28,26 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp }: TimeLoggingModalProps) 
       contact,
       description
     };
-    onSignUp(timeLoggingData);
+
+    if (isAuthenticated && onLogTime) {
+      setIsLogging(true);
+      try {
+        await onLogTime(timeLoggingData);
+        // Reset form on success
+        setMode('helped');
+        setHours(1);
+        setName('');
+        setContact('');
+        setDescription('');
+      } finally {
+        setIsLogging(false);
+      }
+    } else {
+      onSignUp(timeLoggingData);
+    }
   };
+
+  const isFormValid = name.trim() !== '' && contact.trim() !== '';
 
   if (!isOpen) return null;
 
@@ -57,12 +78,14 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp }: TimeLoggingModalProps) 
             </p>
           </div>
 
-          <div className="bg-amber-50 rounded-xl p-3 border border-amber-200">
-            <div className="text-amber-800 text-sm">
-              <p className="font-medium mb-1">🎯 Sign up to unlock your workyard</p>
-              <p>Time tracking helps you maintain balanced relationships and discover new collaboration opportunities.</p>
+          {!isAuthenticated && (
+            <div className="bg-amber-50 rounded-xl p-3 border border-amber-200">
+              <div className="text-amber-800 text-sm">
+                <p className="font-medium mb-1">🎯 Sign up to unlock your workyard</p>
+                <p>Time tracking helps you maintain balanced relationships and discover new collaboration opportunities.</p>
+              </div>
             </div>
-          </div>
+          )}
 
           <div className="bg-gray-50 rounded-xl p-2">
             <div className="flex gap-2">
@@ -101,6 +124,7 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp }: TimeLoggingModalProps) 
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Full name"
                 className="w-full p-2.5 border border-gray-200 rounded-xl mb-2 focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200 text-sm"
+                disabled={isLogging}
               />
               <input
                 type="text"
@@ -108,6 +132,7 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp }: TimeLoggingModalProps) 
                 onChange={(e) => setContact(e.target.value)}
                 placeholder="Email or phone number"
                 className="w-full p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200 text-sm"
+                disabled={isLogging}
               />
             </div>
 
@@ -119,7 +144,8 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp }: TimeLoggingModalProps) 
               <div className="flex items-center gap-3 mb-3">
                 <button
                   onClick={() => setHours(Math.max(0.5, hours - 0.5))}
-                  className="w-8 h-8 rounded-full border-2 border-gray-200 flex items-center justify-center hover:border-amber-400 hover:bg-amber-50 transition-all duration-200"
+                  disabled={isLogging}
+                  className="w-8 h-8 rounded-full border-2 border-gray-200 flex items-center justify-center hover:border-amber-400 hover:bg-amber-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Minus size={14} />
                 </button>
@@ -129,7 +155,8 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp }: TimeLoggingModalProps) 
                 </div>
                 <button
                   onClick={() => setHours(Math.min(8, hours + 0.5))}
-                  className="w-8 h-8 rounded-full border-2 border-gray-200 flex items-center justify-center hover:border-amber-400 hover:bg-amber-50 transition-all duration-200"
+                  disabled={isLogging}
+                  className="w-8 h-8 rounded-full border-2 border-gray-200 flex items-center justify-center hover:border-amber-400 hover:bg-amber-50 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Plus size={14} />
                 </button>
@@ -139,7 +166,8 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp }: TimeLoggingModalProps) 
                   <button
                     key={time}
                     onClick={() => setHours(time)}
-                    className={`px-3 py-1.5 rounded-full font-medium transition-all duration-200 text-sm ${
+                    disabled={isLogging}
+                    className={`px-3 py-1.5 rounded-full font-medium transition-all duration-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed ${
                       hours === time 
                         ? 'bg-black text-white shadow-md' 
                         : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
@@ -165,19 +193,36 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp }: TimeLoggingModalProps) 
                     : 'e.g., They helped me debug a React component issue'
                 }
                 className="w-full p-2.5 border border-gray-200 rounded-xl h-20 resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200 text-sm"
+                disabled={isLogging}
               />
             </div>
           </div>
 
           <button 
-            onClick={handleSignUpToLogTime}
-            className="w-full bg-gray-600 hover:bg-gray-700 text-white py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg"
+            onClick={handleSubmit}
+            disabled={!isFormValid || isLogging}
+            className="w-full bg-black hover:bg-gray-800 text-white py-3 rounded-xl font-semibold transition-all duration-200 transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center justify-center gap-2"
           >
-            Sign up to log time
+            {isLogging ? (
+              <>
+                <Clock size={16} className="animate-spin" />
+                Processing...
+              </>
+            ) : isAuthenticated ? (
+              <>
+                <CheckCircle size={16} />
+                Log Time
+              </>
+            ) : (
+              'Sign up to log time'
+            )}
           </button>
           
           <p className="text-center text-xs text-gray-500">
-            They'll get an invite to join your workyard and confirm this time entry
+            {isAuthenticated 
+              ? "They'll get notified to confirm this time entry"
+              : "They'll get an invite to join your workyard and confirm this time entry"
+            }
           </p>
         </div>
       </div>
