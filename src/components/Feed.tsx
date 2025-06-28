@@ -59,6 +59,7 @@ interface WorkBounty {
   posted_by: string;
   posted_at: string;
   status: 'open' | 'in_progress' | 'completed';
+  applications_count?: number;
 }
 
 interface ProfileData {
@@ -180,10 +181,56 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
   const loadBounties = async () => {
     try {
       setIsLoading(true);
-      // Mock data for work bounties - in a real app, this would come from a database
+      
+      // Load real bounties from database
+      const { data: realBounties, error: bountiesError } = await supabase
+        .from('work_bounties')
+        .select(`
+          id,
+          title,
+          description,
+          service_type,
+          timeline,
+          industry,
+          time_estimate,
+          company_stage,
+          budget_range,
+          location,
+          applications_count,
+          created_at,
+          status,
+          posted_by:profiles!work_bounties_posted_by_fkey(full_name)
+        `)
+        .eq('status', 'open')
+        .order('created_at', { ascending: false })
+        .limit(10);
+
+      if (bountiesError) {
+        console.error('Error loading bounties:', bountiesError);
+      }
+
+      // Format bounties for display
+      const formattedBounties: WorkBounty[] = (realBounties || []).map(bounty => ({
+        id: bounty.id,
+        title: bounty.title,
+        description: bounty.description,
+        service_type: bounty.service_type,
+        timeline: bounty.timeline,
+        industry: bounty.industry,
+        time_estimate: bounty.time_estimate,
+        company_stage: bounty.company_stage,
+        budget_range: bounty.budget_range,
+        location: bounty.location || 'Remote',
+        posted_by: bounty.posted_by?.full_name || 'Anonymous',
+        posted_at: bounty.created_at,
+        status: bounty.status as 'open' | 'in_progress' | 'completed',
+        applications_count: bounty.applications_count || 0
+      }));
+
+      // Add some mock bounties if we don't have enough real ones
       const mockBounties: WorkBounty[] = [
         {
-          id: '1',
+          id: 'mock-1',
           title: 'Legal review of Series A term sheet',
           description: 'Need an experienced startup lawyer to review our Series A term sheet. Looking for someone who has worked with VCs before and can spot potential issues.',
           service_type: 'Legal Review',
@@ -194,11 +241,12 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
           budget_range: '$500-800',
           location: 'Remote',
           posted_by: 'Sarah Chen',
-          posted_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
-          status: 'open'
+          posted_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(),
+          status: 'open',
+          applications_count: 3
         },
         {
-          id: '2',
+          id: 'mock-2',
           title: 'UX critique on social app interface',
           description: 'Looking for a senior UX designer to provide detailed feedback on our social networking app. Need someone with experience in mobile-first design.',
           service_type: 'Design Critique',
@@ -209,57 +257,16 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
           budget_range: '$300-500',
           location: 'Remote',
           posted_by: 'Mike Rodriguez',
-          posted_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(), // 4 hours ago
-          status: 'open'
-        },
-        {
-          id: '3',
-          title: 'Due diligence for biotech venture',
-          description: 'Need help conducting due diligence on an early-stage biotech company. Looking for someone with life sciences background and investment experience.',
-          service_type: 'Strategy Consultation',
-          timeline: 'Next week',
-          industry: 'Healthcare',
-          time_estimate: 'Multiple days',
-          company_stage: 'Pre-seed',
-          budget_range: '$2000-3000',
-          location: 'San Francisco, CA',
-          posted_by: 'Alex Kim',
-          posted_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(), // 6 hours ago
-          status: 'open'
-        },
-        {
-          id: '4',
-          title: 'LLM integration strategy session',
-          description: 'Help me understand how to integrate LLMs into our existing product. Need someone with hands-on experience with OpenAI API and prompt engineering.',
-          service_type: 'Technical Consultation',
-          timeline: 'Flexible',
-          industry: 'Technology',
-          time_estimate: '2-4 hours',
-          company_stage: 'Seed',
-          budget_range: '$400-600',
-          location: 'Remote',
-          posted_by: 'Rachel Park',
-          posted_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(), // 8 hours ago
-          status: 'open'
-        },
-        {
-          id: '5',
-          title: 'Marketing strategy for B2B SaaS',
-          description: 'Looking for a marketing expert to help develop our go-to-market strategy for a new B2B SaaS product. Need someone with experience in enterprise sales.',
-          service_type: 'Marketing Strategy',
-          timeline: 'Within a week',
-          industry: 'Technology',
-          time_estimate: 'Half day',
-          company_stage: 'Series A',
-          budget_range: '$800-1200',
-          location: 'New York, NY',
-          posted_by: 'David Chen',
-          posted_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(), // 12 hours ago
-          status: 'open'
+          posted_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+          status: 'open',
+          applications_count: 1
         }
       ];
+
+      // Combine real and mock bounties
+      const allBounties = [...formattedBounties, ...mockBounties];
+      setBounties(allBounties);
       
-      setBounties(mockBounties);
     } catch (error) {
       console.error('Error loading bounties:', error);
     } finally {
@@ -650,7 +657,15 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
                 >
                   {bounty.posted_by}
                 </button>
-                <p className="text-xs text-gray-500">{formatTimeAgo(bounty.posted_at)}</p>
+                <div className="flex items-center gap-2 text-xs text-gray-500">
+                  <span>{formatTimeAgo(bounty.posted_at)}</span>
+                  {bounty.applications_count !== undefined && bounty.applications_count > 0 && (
+                    <>
+                      <span>•</span>
+                      <span>{bounty.applications_count} application{bounty.applications_count !== 1 ? 's' : ''}</span>
+                    </>
+                  )}
+                </div>
               </div>
             </div>
             <button className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors duration-200 text-sm font-medium flex-shrink-0 ml-3">

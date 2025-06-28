@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, MapPin, Clock, Star, Users, ChevronDown, X, DollarSign, Calendar, Target } from 'lucide-react';
+import { Search, Filter, MapPin, Clock, Star, Users, ChevronDown, X, DollarSign, Calendar, Target, CheckCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import AuthenticatedHeader from './AuthenticatedHeader';
 import ProfileModal from './ProfileModal';
@@ -54,6 +54,8 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
   const [selectedProfile, setSelectedProfile] = useState<NetworkUser | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [showBountyForm, setShowBountyForm] = useState(false);
+  const [isSubmittingBounty, setIsSubmittingBounty] = useState(false);
+  const [bountySubmitted, setBountySubmitted] = useState(false);
   const [bountyData, setBountyData] = useState({
     budget: '',
     description: ''
@@ -256,11 +258,56 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
     setSearchQuery('');
   };
 
-  const handleSubmitBounty = () => {
-    // In a real app, this would create a bounty in the database
-    alert(`Bounty submitted! Budget: ${bountyData.budget}, Description: ${bountyData.description}`);
-    setShowBountyForm(false);
-    setBountyData({ budget: '', description: '' });
+  const handleSubmitBounty = async () => {
+    if (!searchParams || !bountyData.budget) return;
+
+    setIsSubmittingBounty(true);
+    
+    try {
+      // Get current user profile
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile) throw new Error('Profile not found');
+
+      // Create the bounty using the RPC function
+      const { data: bountyId, error } = await supabase.rpc('create_bounty_from_search', {
+        p_posted_by: profile.id,
+        p_title: searchParams.query || `${searchParams.serviceType} Request`,
+        p_description: searchParams.query || `Looking for ${searchParams.serviceType?.toLowerCase()} assistance`,
+        p_service_type: searchParams.serviceType || 'Design Critique',
+        p_deliverable_format: searchParams.deliverableFormat || 'Live Consultation',
+        p_timeline: searchParams.timeline || 'Immediate',
+        p_industry: searchParams.industry || 'Technology',
+        p_time_estimate: searchParams.timeEstimate || '1-2 hours',
+        p_company_stage: searchParams.companyStage || 'Pre-seed',
+        p_budget_range: bountyData.budget,
+        p_requirements: bountyData.description || null
+      });
+
+      if (error) throw error;
+
+      setBountySubmitted(true);
+      setShowBountyForm(false);
+      setBountyData({ budget: '', description: '' });
+
+      // Show success message for 3 seconds
+      setTimeout(() => {
+        setBountySubmitted(false);
+      }, 3000);
+
+    } catch (error) {
+      console.error('Error creating bounty:', error);
+      alert('Failed to submit bounty. Please try again.');
+    } finally {
+      setIsSubmittingBounty(false);
+    }
   };
 
   const getInitials = (name: string) => {
@@ -321,6 +368,17 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
           </p>
         </div>
 
+        {/* Success Message */}
+        {bountySubmitted && (
+          <div className="bg-green-50 border border-green-200 rounded-xl p-4 mb-6 flex items-center gap-3">
+            <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+            <div>
+              <p className="text-green-800 font-medium">Bounty submitted successfully!</p>
+              <p className="text-green-700 text-sm">Your work request has been posted and professionals can now apply.</p>
+            </div>
+          </div>
+        )}
+
         {/* Search Parameters Summary with Bounty Option */}
         {searchParams && (
           <div className="bg-white rounded-xl p-4 md:p-6 border border-gray-200 hover:border-gray-300 transition-colors duration-200 mb-6">
@@ -362,12 +420,10 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
                   <span className="truncate">{searchParams.deliverableFormat}</span>
                 </div>
               )}
-              {searchParams.location && (
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <MapPin size={14} className="flex-shrink-0" />
-                  <span className="truncate">Remote</span>
-                </div>
-              )}
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <MapPin size={14} className="flex-shrink-0" />
+                <span className="truncate">Remote</span>
+              </div>
             </div>
 
             <div className="flex items-center justify-between">
@@ -386,8 +442,9 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
               {!showBountyForm ? (
                 <button
                   onClick={() => setShowBountyForm(true)}
-                  className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors duration-200 text-sm font-medium flex-shrink-0 ml-3"
+                  className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors duration-200 text-sm font-medium flex-shrink-0 ml-3 flex items-center gap-2"
                 >
+                  <DollarSign size={16} />
                   Submit Bounty
                 </button>
               ) : (
@@ -400,10 +457,20 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
                   </button>
                   <button
                     onClick={handleSubmitBounty}
-                    disabled={!bountyData.budget}
-                    className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors duration-200 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled={!bountyData.budget || isSubmittingBounty}
+                    className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors duration-200 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
-                    Submit Bounty
+                    {isSubmittingBounty ? (
+                      <>
+                        <Clock size={16} className="animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      <>
+                        <DollarSign size={16} />
+                        Submit Bounty
+                      </>
+                    )}
                   </button>
                 </div>
               )}
@@ -426,7 +493,8 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
                       <option value="$500-800">$500-800</option>
                       <option value="$800-1200">$800-1200</option>
                       <option value="$1200-2000">$1200-2000</option>
-                      <option value="$2000+">$2000+</option>
+                      <option value="$2000-3000">$2000-3000</option>
+                      <option value="$3000+">$3000+</option>
                     </select>
                   </div>
                   <div>
