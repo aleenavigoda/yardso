@@ -55,10 +55,10 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
         setError('');
         setIsLoading(false);
         
-        // Close modal and trigger success callback immediately
+        // Close modal - the main App will handle the auth state change
         console.log('Sign in successful, closing modal');
         onClose();
-        onSignInSuccess();
+        // Don't call onSignInSuccess here - let the main App handle it via auth state change
       } else {
         setError('Sign in failed. Please try again.');
         setIsLoading(false);
@@ -89,29 +89,6 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
       setError('');
     }
   }, [isOpen]);
-
-  // Listen for auth state changes to handle successful sign-in
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (event === 'SIGNED_IN' && session?.user && isLoading) {
-        console.log('Auth state change detected: SIGNED_IN');
-        
-        // Reset form and close modal
-        setFormData({ email: '', password: '' });
-        setError('');
-        setIsLoading(false);
-        
-        onClose();
-        onSignInSuccess();
-      }
-    });
-
-    return () => {
-      subscription.unsubscribe();
-    };
-  }, [isOpen, isLoading, onClose, onSignInSuccess]);
 
   if (!isOpen) return null;
 
