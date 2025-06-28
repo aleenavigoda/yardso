@@ -244,13 +244,22 @@ function App() {
     setUserProfile(null);
   };
 
-  // Simple auth initialization
+  // Minimal auth initialization with timeout fallback
   useEffect(() => {
     let mounted = true;
+    let timeoutId: NodeJS.Timeout;
 
     const initAuth = async () => {
       try {
-        console.log('Initializing authentication...');
+        console.log('Starting auth initialization...');
+
+        // Set a timeout to prevent infinite loading
+        timeoutId = setTimeout(() => {
+          if (mounted) {
+            console.log('Auth initialization timeout - proceeding without auth');
+            setIsInitializing(false);
+          }
+        }, 5000); // 5 second timeout
 
         // Check for existing session
         const { data: { session }, error } = await supabase.auth.getSession();
@@ -259,6 +268,7 @@ function App() {
           console.error('Error getting session:', error);
           if (mounted) {
             clearAuthState();
+            clearTimeout(timeoutId);
             setIsInitializing(false);
           }
           return;
@@ -290,39 +300,40 @@ function App() {
                       localStorage.removeItem('pendingTimeLog');
                     }
                   }
+                  
+                  clearTimeout(timeoutId);
+                  setIsInitializing(false);
                 }
+                return;
               } else {
                 console.log('Stored profile user_id mismatch, refreshing...');
                 localStorage.removeItem('userProfile');
-                if (mounted) {
-                  await handleAuthSuccess(session.user);
-                }
               }
             } catch (e) {
               console.error('Error parsing stored profile:', e);
               localStorage.removeItem('userProfile');
-              if (mounted) {
-                await handleAuthSuccess(session.user);
-              }
             }
-          } else {
-            if (mounted) {
-              await handleAuthSuccess(session.user);
-            }
+          }
+          
+          // If we get here, we need to handle auth success
+          if (mounted) {
+            await handleAuthSuccess(session.user);
+            clearTimeout(timeoutId);
+            setIsInitializing(false);
           }
         } else {
           console.log('No active session found');
           if (mounted) {
             clearAuthState();
+            clearTimeout(timeoutId);
+            setIsInitializing(false);
           }
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
         if (mounted) {
           clearAuthState();
-        }
-      } finally {
-        if (mounted) {
+          clearTimeout(timeoutId);
           setIsInitializing(false);
         }
       }
@@ -345,6 +356,9 @@ function App() {
 
     return () => {
       mounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
       subscription.unsubscribe();
     };
   }, []);
@@ -454,13 +468,14 @@ function App() {
     }
   };
 
-  // Show loading screen during initialization
+  // Show loading screen during initialization with timeout
   if (isInitializing) {
     return (
       <div className="min-h-screen w-full bg-amber-200 flex items-center justify-center">
         <div className="text-center">
           <div className="text-2xl font-bold text-black italic mb-4">yard</div>
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto"></div>
+          <div className="text-sm text-gray-600 mt-4">Loading your workyard...</div>
         </div>
       </div>
     );
