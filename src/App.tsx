@@ -21,7 +21,7 @@ function App() {
   const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | undefined>();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
-  const [isInitializing, setIsInitializing] = useState(true);
+  const [authInitialized, setAuthInitialized] = useState(false);
 
   const detectUrlType = (url: string): string => {
     if (url.includes('github.com')) return 'github';
@@ -244,107 +244,74 @@ function App() {
     setUserProfile(null);
   };
 
-  // Minimal auth initialization with timeout fallback
-  useEffect(() => {
-    let mounted = true;
-    let timeoutId: NodeJS.Timeout;
+  // Initialize auth only when needed (lazy loading)
+  const initializeAuth = async () => {
+    if (authInitialized) return;
+    
+    try {
+      console.log('Initializing authentication...');
+      setAuthInitialized(true);
 
-    const initAuth = async () => {
-      try {
-        console.log('Starting auth initialization...');
+      // Check for existing session
+      const { data: { session }, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('Error getting session:', error);
+        clearAuthState();
+        return;
+      }
 
-        // Set a timeout to prevent infinite loading
-        timeoutId = setTimeout(() => {
-          if (mounted) {
-            console.log('Auth initialization timeout - proceeding without auth');
-            setIsInitializing(false);
-          }
-        }, 5000); // 5 second timeout
-
-        // Check for existing session
-        const { data: { session }, error } = await supabase.auth.getSession();
+      if (session && session.user) {
+        console.log('Found existing session for user:', session.user.id);
         
-        if (error) {
-          console.error('Error getting session:', error);
-          if (mounted) {
-            clearAuthState();
-            clearTimeout(timeoutId);
-            setIsInitializing(false);
-          }
-          return;
-        }
-
-        if (session && session.user) {
-          console.log('Found existing session for user:', session.user.id);
-          
-          // Check if we have profile in localStorage first
-          const storedProfile = localStorage.getItem('userProfile');
-          if (storedProfile) {
-            try {
-              const profile = JSON.parse(storedProfile);
-              // Verify the stored profile matches the current user
-              if (profile.user_id === session.user.id) {
-                if (mounted) {
-                  setUserProfile(profile);
-                  setIsAuthenticated(true);
-                  console.log('Loaded profile from localStorage');
-                  
-                  // Check for pending time log data
-                  const pendingTimeLogData = localStorage.getItem('pendingTimeLog');
-                  if (pendingTimeLogData) {
-                    try {
-                      const timeLogData = JSON.parse(pendingTimeLogData);
-                      setPendingTimeLog(timeLogData);
-                    } catch (e) {
-                      console.error('Error parsing pending time log data:', e);
-                      localStorage.removeItem('pendingTimeLog');
-                    }
-                  }
-                  
-                  clearTimeout(timeoutId);
-                  setIsInitializing(false);
+        // Check if we have profile in localStorage first
+        const storedProfile = localStorage.getItem('userProfile');
+        if (storedProfile) {
+          try {
+            const profile = JSON.parse(storedProfile);
+            // Verify the stored profile matches the current user
+            if (profile.user_id === session.user.id) {
+              setUserProfile(profile);
+              setIsAuthenticated(true);
+              console.log('Loaded profile from localStorage');
+              
+              // Check for pending time log data
+              const pendingTimeLogData = localStorage.getItem('pendingTimeLog');
+              if (pendingTimeLogData) {
+                try {
+                  const timeLogData = JSON.parse(pendingTimeLogData);
+                  setPendingTimeLog(timeLogData);
+                } catch (e) {
+                  console.error('Error parsing pending time log data:', e);
+                  localStorage.removeItem('pendingTimeLog');
                 }
-                return;
-              } else {
-                console.log('Stored profile user_id mismatch, refreshing...');
-                localStorage.removeItem('userProfile');
               }
-            } catch (e) {
-              console.error('Error parsing stored profile:', e);
+            } else {
+              console.log('Stored profile user_id mismatch, refreshing...');
               localStorage.removeItem('userProfile');
+              await handleAuthSuccess(session.user);
             }
-          }
-          
-          // If we get here, we need to handle auth success
-          if (mounted) {
+          } catch (e) {
+            console.error('Error parsing stored profile:', e);
+            localStorage.removeItem('userProfile');
             await handleAuthSuccess(session.user);
-            clearTimeout(timeoutId);
-            setIsInitializing(false);
           }
         } else {
-          console.log('No active session found');
-          if (mounted) {
-            clearAuthState();
-            clearTimeout(timeoutId);
-            setIsInitializing(false);
-          }
+          await handleAuthSuccess(session.user);
         }
-      } catch (error) {
-        console.error('Auth initialization error:', error);
-        if (mounted) {
-          clearAuthState();
-          clearTimeout(timeoutId);
-          setIsInitializing(false);
-        }
+      } else {
+        console.log('No active session found');
+        clearAuthState();
       }
-    };
+    } catch (error) {
+      console.error('Auth initialization error:', error);
+      clearAuthState();
+    }
+  };
 
-    initAuth();
-
-    // Listen for auth state changes
+  // Set up auth state listener only once
+  useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
-      
       console.log('Auth state changed:', event);
       
       if (event === 'SIGNED_IN' && session?.user) {
@@ -355,10 +322,6 @@ function App() {
     });
 
     return () => {
-      mounted = false;
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
       subscription.unsubscribe();
     };
   }, []);
@@ -439,20 +402,24 @@ function App() {
     setShowFeed(false);
   };
 
-  const handleHeaderSignUpSuccess = () => {
+  const handleHeaderSignUpSuccess = async () => {
+    await initializeAuth(); // Initialize auth when user signs up
     setShowDashboard(true);
   };
 
-  const handleHeaderSignInSuccess = () => {
+  const handleHeaderSignInSuccess = async () => {
+    await initializeAuth(); // Initialize auth when user signs in
     setShowDashboard(true);
   };
 
-  const handleDashboardClick = () => {
+  const handleDashboardClick = async () => {
+    await initializeAuth(); // Initialize auth when accessing dashboard
     setShowDashboard(true);
     setShowFeed(false);
   };
 
-  const handleFeedClick = () => {
+  const handleFeedClick = async () => {
+    await initializeAuth(); // Initialize auth when accessing feed
     setShowFeed(true);
     setShowDashboard(false);
   };
@@ -467,19 +434,6 @@ function App() {
       clearAuthState();
     }
   };
-
-  // Show loading screen during initialization with timeout
-  if (isInitializing) {
-    return (
-      <div className="min-h-screen w-full bg-amber-200 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-2xl font-bold text-black italic mb-4">yard</div>
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto"></div>
-          <div className="text-sm text-gray-600 mt-4">Loading your workyard...</div>
-        </div>
-      </div>
-    );
-  }
 
   // Show feed if user is authenticated and wants to see it
   if (showFeed && isAuthenticated) {
