@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, User, CheckCircle, XCircle, Plus, LogOut, Mail, Phone, Edit } from 'lucide-react';
+import { Clock, User, CheckCircle, XCircle, Plus, LogOut, Mail, Phone, Edit, Home, BarChart3 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import SignOutModal from './SignOutModal';
 import EditProfileModal from './EditProfileModal';
@@ -18,6 +18,7 @@ const Dashboard = ({ onBack }: DashboardProps) => {
   const [isSignOutModalOpen, setIsSignOutModalOpen] = useState(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [isTimeLoggingOpen, setIsTimeLoggingOpen] = useState(false);
+  const [showFeed, setShowFeed] = useState(false);
   const [timeLogForm, setTimeLogForm] = useState({
     mode: 'helped' as 'helped' | 'wasHelped',
     hours: 1,
@@ -232,6 +233,10 @@ const Dashboard = ({ onBack }: DashboardProps) => {
     }
   };
 
+  const handleFeedClick = () => {
+    setShowFeed(true);
+  };
+
   const timeOptions = [0.5, 1, 1.5, 2, 3, 4, 6, 8];
 
   return (
@@ -247,13 +252,36 @@ const Dashboard = ({ onBack }: DashboardProps) => {
               yard
             </button>
           </div>
-          <button
-            onClick={() => setIsSignOutModalOpen(true)}
-            className="flex items-center gap-2 text-black hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
-          >
-            <LogOut size={16} />
-            <span className="hidden sm:inline">Sign Out</span>
-          </button>
+          <nav>
+            <ul className="flex gap-6 items-center">
+              <li>
+                <button 
+                  onClick={handleFeedClick}
+                  className="flex items-center gap-2 text-black hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
+                >
+                  <Home size={16} />
+                  <span className="hidden sm:inline">feed</span>
+                </button>
+              </li>
+              <li>
+                <button 
+                  className="flex items-center gap-2 text-black bg-white bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
+                >
+                  <BarChart3 size={16} />
+                  <span className="hidden sm:inline">dashboard</span>
+                </button>
+              </li>
+              <li>
+                <button
+                  onClick={() => setIsSignOutModalOpen(true)}
+                  className="flex items-center gap-2 text-black hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
+                >
+                  <LogOut size={16} />
+                  <span className="hidden sm:inline">sign out</span>
+                </button>
+              </li>
+            </ul>
+          </nav>
         </header>
 
         {/* Welcome Section */}

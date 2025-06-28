@@ -7,9 +7,11 @@ interface HeaderProps {
   isAuthenticated: boolean;
   userProfile: any;
   showDashboard: boolean;
+  showFeed: boolean;
   onSignUpSuccess?: () => void;
   onSignInSuccess?: () => void;
   onDashboardClick?: () => void;
+  onFeedClick?: () => void;
   onSignOut?: () => void;
 }
 
@@ -17,9 +19,11 @@ const Header = ({
   isAuthenticated, 
   userProfile, 
   showDashboard, 
+  showFeed,
   onSignUpSuccess, 
   onSignInSuccess, 
   onDashboardClick, 
+  onFeedClick,
   onSignOut 
 }: HeaderProps) => {
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
@@ -51,7 +55,10 @@ const Header = ({
               <>
                 <li>
                   <button 
-                    className="flex items-center gap-2 text-black hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
+                    onClick={onFeedClick}
+                    className={`flex items-center gap-2 text-black hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200 ${
+                      showFeed ? 'bg-white bg-opacity-50' : ''
+                    }`}
                   >
                     <Home size={16} />
                     <span className="hidden sm:inline">feed</span>

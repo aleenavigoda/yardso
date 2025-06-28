@@ -8,7 +8,7 @@ import TimeLoggingBanner from './components/TimeLoggingBanner';
 import TimeLoggingModal from './components/TimeLoggingModal';
 import SignUpModal from './components/SignUpModal';
 import Dashboard from './components/Dashboard';
-import SocialFeed from './components/SocialFeed';
+import Feed from './components/Feed';
 import { supabase } from './lib/supabase';
 import type { TimeLoggingData } from './types';
 
@@ -17,6 +17,7 @@ function App() {
   const [isTimeLoggingOpen, setIsTimeLoggingOpen] = useState(false);
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
+  const [showFeed, setShowFeed] = useState(false);
   const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | undefined>();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -306,6 +307,7 @@ function App() {
         localStorage.removeItem('userProfile');
         localStorage.removeItem('pendingTimeLog');
         setShowDashboard(false);
+        setShowFeed(false);
         setPendingTimeLog(undefined);
         setIsAuthenticated(false);
         setUserProfile(null);
@@ -388,6 +390,7 @@ function App() {
 
   const handleBackToHome = () => {
     setShowDashboard(false);
+    setShowFeed(false);
   };
 
   const handleHeaderSignUpSuccess = () => {
@@ -400,11 +403,22 @@ function App() {
 
   const handleDashboardClick = () => {
     setShowDashboard(true);
+    setShowFeed(false);
+  };
+
+  const handleFeedClick = () => {
+    setShowFeed(true);
+    setShowDashboard(false);
   };
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
   };
+
+  // Show feed if user is authenticated and wants to see it
+  if (showFeed && isAuthenticated) {
+    return <Feed onBack={handleBackToHome} />;
+  }
 
   // Show dashboard if user is authenticated and wants to see it
   if (showDashboard && isAuthenticated) {
@@ -418,9 +432,11 @@ function App() {
           isAuthenticated={isAuthenticated}
           userProfile={userProfile}
           showDashboard={showDashboard}
+          showFeed={showFeed}
           onSignUpSuccess={handleHeaderSignUpSuccess}
           onSignInSuccess={handleHeaderSignInSuccess}
           onDashboardClick={handleDashboardClick}
+          onFeedClick={handleFeedClick}
           onSignOut={handleSignOut}
         />
         <main className="mt-16 md:mt-24">
@@ -429,9 +445,6 @@ function App() {
           
           {/* Show time logging banner for both authenticated and non-authenticated users */}
           <TimeLoggingBanner onLogTime={() => setIsTimeLoggingOpen(true)} />
-          
-          {/* Show social feed for authenticated users */}
-          {isAuthenticated && <SocialFeed />}
           
           <SearchForm
             searchValue={searchValue}
