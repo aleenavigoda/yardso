@@ -277,88 +277,95 @@ function App() {
     setUserProfile(null);
   };
 
-  // Fixed auth initialization with better error handling
+  // Bulletproof auth initialization with fallback
   useEffect(() => {
     let isMounted = true;
+    let completed = false;
+    let subscription = null;
     
-    const initAuth = async () => {
-      try {
-        console.log('Starting auth initialization...');
-        
-        // Set up auth state listener first
-        const { data: { subscription } } = supabase.auth.onAuthStateChange(
-          async (event, session) => {
-            console.log('Auth state changed:', event);
-            
-            if (!isMounted) return;
-            
-            if (event === 'SIGNED_IN' && session?.user) {
-              console.log('Handling auth success for user:', session.user.id);
-              try {
-                await handleAuthSuccess(session.user);
-              } catch (error) {
-                console.error('Auth state change handler failed:', error);
-              }
-            } else if (event === 'SIGNED_OUT') {
-              clearAuthState();
-            }
-          }
-        );
-
-        // Get initial session
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (!isMounted) return;
-        
-        // Handle the specific JWT session error
-        if (error && error.message?.includes('Session from session_id claim in JWT does not exist')) {
-          console.log('Invalid JWT session detected, clearing auth state');
-          // Clear the invalid session and let user sign in fresh
-          await supabase.auth.signOut();
-          clearAuthState();
-          setIsInitializing(false);
-          return;
-        }
-        
-        if (error) {
-          console.error('Auth session error:', error);
-          clearAuthState();
-          setIsInitializing(false);
-          return;
-        }
-        
-        if (session?.user) {
-          console.log('Initial session found for user:', session.user.id);
-          try {
-            await handleAuthSuccess(session.user);
-          } catch (error) {
-            console.error('Initial auth success handler failed:', error);
-          }
-        } else {
-          clearAuthState();
-        }
-        
-        setIsInitializing(false);
+    const completeInit = () => {
+      if (isMounted && !completed) {
         console.log('Auth initialization complete');
-
-        // Cleanup function
-        return () => {
-          subscription.unsubscribe();
-        };
-        
-      } catch (error) {
-        console.error('Auth initialization error:', error);
-        if (isMounted) {
-          clearAuthState();
-          setIsInitializing(false);
-        }
+        setIsInitializing(false);
+        completed = true;
       }
     };
 
-    initAuth();
+    console.log('Starting auth initialization...');
+
+    try {
+      // Set up auth state listener first (this is synchronous)
+      const { data } = supabase.auth.onAuthStateChange(
+        async (event, session) => {
+          console.log('Auth state changed:', event);
+          
+          if (!isMounted) return;
+          
+          if (event === 'SIGNED_IN' && session?.user) {
+            console.log('Handling auth success for user:', session.user.id);
+            try {
+              await handleAuthSuccess(session.user);
+            } catch (error) {
+              console.error('Auth state change handler failed:', error);
+            }
+          } else if (event === 'SIGNED_OUT') {
+            clearAuthState();
+          }
+        }
+      );
+      subscription = data.subscription;
+      console.log('Auth listener set up successfully');
+    } catch (error) {
+      console.error('Failed to set up auth listener:', error);
+    }
+
+    // Add a fallback timer - if session check takes too long, complete anyway
+    const fallbackTimer = setTimeout(() => {
+      console.log('Auth initialization fallback timeout (5s)');
+      completeInit();
+    }, 5000);
+    
+    // Session check with promise-based approach (more reliable than async/await in useEffect)
+    supabase.auth.getSession()
+      .then(({ data: { session }, error }) => {
+        if (!isMounted) return;
+        
+        console.log('Session check completed', { hasSession: !!session, error: error?.message });
+        
+        if (error) {
+          if (error.message?.includes('Session from session_id claim in JWT does not exist') || 
+              error.status === 403) {
+            console.log('Invalid session, clearing auth');
+            supabase.auth.signOut().catch(console.error);
+          }
+          clearAuthState();
+        } else if (session?.user) {
+          console.log('Valid session found for user:', session.user.id);
+          handleAuthSuccess(session.user).catch(console.error);
+        } else {
+          console.log('No session found');
+          clearAuthState();
+        }
+        
+        clearTimeout(fallbackTimer);
+        completeInit();
+      })
+      .catch(error => {
+        console.error('Session check failed:', error);
+        if (isMounted) {
+          clearAuthState();
+          clearTimeout(fallbackTimer);
+          completeInit();
+        }
+      });
 
     return () => {
       isMounted = false;
+      completed = true;
+      clearTimeout(fallbackTimer);
+      if (subscription) {
+        subscription.unsubscribe();
+      }
     };
   }, []);
 
