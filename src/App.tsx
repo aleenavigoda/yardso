@@ -244,77 +244,31 @@ function App() {
     setUserProfile(null);
   };
 
-  // Initialize auth on app load
+  // Simple auth initialization - no complex logic
   useEffect(() => {
     let mounted = true;
 
     const initAuth = async () => {
       try {
-        console.log('Initializing authentication...');
+        console.log('Checking for existing session...');
 
-        // Check for existing session first
+        // Get current session
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
           console.error('Error getting session:', error);
           if (mounted) {
             clearAuthState();
-            setIsInitializing(false);
           }
           return;
         }
 
-        if (session && session.user) {
-          console.log('Found existing session for user:', session.user.id);
-          
-          // Check if we have profile in localStorage first
-          const storedProfile = localStorage.getItem('userProfile');
-          if (storedProfile) {
-            try {
-              const profile = JSON.parse(storedProfile);
-              // Verify the stored profile matches the current user
-              if (profile.user_id === session.user.id) {
-                if (mounted) {
-                  setUserProfile(profile);
-                  setIsAuthenticated(true);
-                  console.log('Loaded profile from localStorage');
-                  
-                  // Check for pending time log data
-                  const pendingTimeLogData = localStorage.getItem('pendingTimeLog');
-                  if (pendingTimeLogData) {
-                    try {
-                      const timeLogData = JSON.parse(pendingTimeLogData);
-                      setPendingTimeLog(timeLogData);
-                    } catch (e) {
-                      console.error('Error parsing pending time log data:', e);
-                      localStorage.removeItem('pendingTimeLog');
-                    }
-                  }
-                }
-              } else {
-                console.log('Stored profile user_id mismatch, refreshing...');
-                localStorage.removeItem('userProfile');
-                if (mounted) {
-                  await handleAuthSuccess(session.user);
-                }
-              }
-            } catch (e) {
-              console.error('Error parsing stored profile:', e);
-              localStorage.removeItem('userProfile');
-              if (mounted) {
-                await handleAuthSuccess(session.user);
-              }
-            }
-          } else {
-            if (mounted) {
-              await handleAuthSuccess(session.user);
-            }
-          }
+        if (session?.user) {
+          console.log('Found existing session');
+          await handleAuthSuccess(session.user);
         } else {
-          console.log('No active session found');
-          if (mounted) {
-            clearAuthState();
-          }
+          console.log('No existing session');
+          clearAuthState();
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
@@ -330,7 +284,7 @@ function App() {
 
     initAuth();
 
-    // Listen for auth state changes
+    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
       
@@ -454,7 +408,7 @@ function App() {
     }
   };
 
-  // Show loading screen during initialization
+  // Show loading screen ONLY during initialization
   if (isInitializing) {
     return (
       <div className="min-h-screen w-full bg-amber-200 flex items-center justify-center">

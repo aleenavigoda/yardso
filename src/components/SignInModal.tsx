@@ -58,7 +58,7 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
         // Close modal - the main App will handle the auth state change
         console.log('Sign in successful, closing modal');
         onClose();
-        // Don't call onSignInSuccess here - let the main App handle it via auth state change
+        onSignInSuccess();
       } else {
         setError('Sign in failed. Please try again.');
         setIsLoading(false);
