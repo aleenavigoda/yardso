@@ -10,9 +10,10 @@ import type { TimeLoggingData, Profile, ProfileUrl } from '../types';
 interface DashboardProps {
   onBack: () => void;
   onFeedClick: () => void;
+  onBrowseNetworkClick: () => void;
 }
 
-const Dashboard = ({ onBack, onFeedClick }: DashboardProps) => {
+const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileUrls, setProfileUrls] = useState<ProfileUrl[]>([]);
   const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | null>(null);
@@ -341,7 +342,7 @@ const Dashboard = ({ onBack, onFeedClick }: DashboardProps) => {
                       value={timeLogForm.contact}
                       onChange={(e) => setTimeLogForm({ ...timeLogForm, contact: e.target.value })}
                       placeholder="Email or phone"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200 text-sm"
+                      className="w-full pl-4 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200 text-sm"
                     />
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
@@ -435,7 +436,10 @@ const Dashboard = ({ onBack, onFeedClick }: DashboardProps) => {
             <p className="text-gray-600 text-sm mb-4">
               Search for professionals who can help with your projects
             </p>
-            <button className="w-full bg-gray-100 text-gray-700 py-2 rounded-xl hover:bg-gray-200 transition-all duration-200">
+            <button 
+              onClick={onBrowseNetworkClick}
+              className="w-full bg-gray-100 text-gray-700 py-2 rounded-xl hover:bg-gray-200 transition-all duration-200"
+            >
               Browse Network
             </button>
           </div>

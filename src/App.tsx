@@ -9,6 +9,7 @@ import TimeLoggingModal from './components/TimeLoggingModal';
 import SignUpModal from './components/SignUpModal';
 import Dashboard from './components/Dashboard';
 import Feed from './components/Feed';
+import BrowseNetwork from './components/BrowseNetwork';
 import { supabase } from './lib/supabase';
 import type { TimeLoggingData } from './types';
 
@@ -18,6 +19,7 @@ function App() {
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
   const [showDashboard, setShowDashboard] = useState(false);
   const [showFeed, setShowFeed] = useState(false);
+  const [showBrowseNetwork, setShowBrowseNetwork] = useState(false);
   const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | undefined>();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -281,6 +283,7 @@ function App() {
     localStorage.removeItem('pendingTimeLog');
     setShowDashboard(false);
     setShowFeed(false);
+    setShowBrowseNetwork(false);
     setPendingTimeLog(undefined);
     setIsAuthenticated(false);
     setUserProfile(null);
@@ -443,6 +446,7 @@ function App() {
   const handleBackToHome = () => {
     setShowDashboard(false);
     setShowFeed(false);
+    setShowBrowseNetwork(false);
   };
 
   const handleHeaderSignUpSuccess = () => {
@@ -456,11 +460,19 @@ function App() {
   const handleDashboardClick = () => {
     setShowDashboard(true);
     setShowFeed(false);
+    setShowBrowseNetwork(false);
   };
 
   const handleFeedClick = () => {
     setShowFeed(true);
     setShowDashboard(false);
+    setShowBrowseNetwork(false);
+  };
+
+  const handleBrowseNetworkClick = () => {
+    setShowBrowseNetwork(true);
+    setShowDashboard(false);
+    setShowFeed(false);
   };
 
   const handleSignOut = async () => {
@@ -487,6 +499,18 @@ function App() {
     );
   }
 
+  // Show browse network if user is authenticated and wants to see it
+  if (showBrowseNetwork && isAuthenticated) {
+    return (
+      <BrowseNetwork 
+        onBack={handleBackToHome}
+        onFeedClick={handleFeedClick}
+        onDashboardClick={handleDashboardClick}
+        onSignOut={handleSignOut}
+      />
+    );
+  }
+
   // Show feed if user is authenticated and wants to see it
   if (showFeed && isAuthenticated) {
     return (
@@ -504,6 +528,7 @@ function App() {
       <Dashboard 
         onBack={handleBackToHome} 
         onFeedClick={handleFeedClick}
+        onBrowseNetworkClick={handleBrowseNetworkClick}
       />
     );
   }
