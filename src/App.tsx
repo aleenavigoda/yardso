@@ -22,7 +22,6 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [isInitializing, setIsInitializing] = useState(true);
-  const [authError, setAuthError] = useState<string | null>(null);
 
   const detectUrlType = (url: string): string => {
     if (url.includes('github.com')) return 'github';
@@ -163,7 +162,6 @@ function App() {
   const handleAuthSuccess = async (user: any) => {
     try {
       console.log('Handling auth success for user:', user.id);
-      setAuthError(null);
       
       // Check if profile exists
       const { data: existingProfile, error: profileError } = await supabase
@@ -231,7 +229,6 @@ function App() {
       console.log('Auth success completed successfully');
     } catch (error: any) {
       console.error('Error in handleAuthSuccess:', error);
-      setAuthError('Failed to load profile data. Please try refreshing the page.');
       // Don't prevent sign-in for profile errors
       console.log('Auth success had errors but continuing...');
     }
@@ -245,26 +242,15 @@ function App() {
     setPendingTimeLog(undefined);
     setIsAuthenticated(false);
     setUserProfile(null);
-    setAuthError(null);
   };
 
-  // Improved auth initialization with better error handling
+  // Simplified auth initialization
   useEffect(() => {
     let mounted = true;
-    let timeoutId: NodeJS.Timeout;
 
     const initAuth = async () => {
       try {
         console.log('Initializing authentication...');
-
-        // Set a timeout for the entire auth initialization
-        timeoutId = setTimeout(() => {
-          if (mounted) {
-            console.warn('Auth initialization timed out');
-            setAuthError('Authentication service is taking too long to respond. Please refresh the page.');
-            setIsInitializing(false);
-          }
-        }, 10000); // 10 second timeout
 
         // Check for existing session first
         const { data: { session }, error } = await supabase.auth.getSession();
@@ -273,7 +259,6 @@ function App() {
           console.error('Error getting session:', error);
           if (mounted) {
             clearAuthState();
-            setAuthError('Failed to check authentication status. Please refresh the page.');
             setIsInitializing(false);
           }
           return;
@@ -331,16 +316,10 @@ function App() {
             clearAuthState();
           }
         }
-
-        // Clear the timeout if we get here successfully
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
       } catch (error) {
         console.error('Auth initialization error:', error);
         if (mounted) {
           clearAuthState();
-          setAuthError('Failed to initialize authentication. Please refresh the page.');
         }
       } finally {
         if (mounted) {
@@ -351,7 +330,7 @@ function App() {
 
     initAuth();
 
-    // Listen for auth state changes - simplified
+    // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
       
@@ -366,9 +345,6 @@ function App() {
 
     return () => {
       mounted = false;
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
       subscription.unsubscribe();
     };
   }, []); // Empty dependency array is crucial
@@ -484,18 +460,7 @@ function App() {
       <div className="min-h-screen w-full bg-amber-200 flex items-center justify-center">
         <div className="text-center">
           <div className="text-2xl font-bold text-black italic mb-4">yard</div>
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto mb-4"></div>
-          {authError && (
-            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded max-w-md mx-auto">
-              <p className="text-sm">{authError}</p>
-              <button 
-                onClick={() => window.location.reload()} 
-                className="mt-2 text-red-800 underline text-sm"
-              >
-                Refresh Page
-              </button>
-            </div>
-          )}
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto"></div>
         </div>
       </div>
     );
