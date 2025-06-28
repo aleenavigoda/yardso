@@ -277,7 +277,17 @@ function App() {
     setUserProfile(null);
   };
 
-  // Fixed auth initialization with JWT session error handling
+  // Create a timeout wrapper for getSession
+  const getSessionWithTimeout = (timeoutMs = 10000) => {
+    return Promise.race([
+      supabase.auth.getSession(),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Session check timeout')), timeoutMs)
+      )
+    ]);
+  };
+
+  // Fixed auth initialization with timeout for getSession
   useEffect(() => {
     let isMounted = true;
     
@@ -302,14 +312,14 @@ function App() {
     const initAuth = () => {
       console.log('Starting auth initialization...');
       
-      supabase.auth.getSession()
+      // Use the timeout wrapper for getSession
+      getSessionWithTimeout(10000)
         .then(({ data: { session }, error }) => {
           if (!isMounted) return;
           
           // Handle the specific JWT session error
           if (error && error.message?.includes('Session from session_id claim in JWT does not exist')) {
             console.log('Invalid JWT session detected, clearing auth state');
-            // Clear the invalid session and let user sign in fresh
             supabase.auth.signOut().catch(console.error);
             clearAuthState();
             console.log('Auth initialization complete (cleared invalid session)');
@@ -338,10 +348,10 @@ function App() {
           setIsInitializing(false);
         })
         .catch(error => {
-          console.error('Auth initialization error:', error);
+          console.error('Auth initialization error (including timeout):', error);
           if (isMounted) {
             clearAuthState();
-            console.log('Auth initialization complete (catch case)');
+            console.log('Auth initialization complete (timeout/error case)');
             setIsInitializing(false);
           }
         });
