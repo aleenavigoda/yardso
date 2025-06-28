@@ -21,6 +21,7 @@ function App() {
   const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | undefined>();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
 
   const detectUrlType = (url: string): string => {
     if (url.includes('github.com')) return 'github';
@@ -233,10 +234,26 @@ function App() {
     }
   };
 
-  // Simplified auth initialization
+  const clearAuthState = () => {
+    localStorage.removeItem('userProfile');
+    localStorage.removeItem('pendingTimeLog');
+    setShowDashboard(false);
+    setShowFeed(false);
+    setPendingTimeLog(undefined);
+    setIsAuthenticated(false);
+    setUserProfile(null);
+  };
+
+  // Enhanced auth initialization with better session handling
   useEffect(() => {
     const initAuth = async () => {
       try {
+        setIsInitializing(true);
+        console.log('Initializing authentication...');
+
+        // First, clear any potentially stale state
+        // This helps with refresh token issues
+        
         // Check for email confirmation tokens in URL hash
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const accessToken = hashParams.get('access_token');
@@ -244,6 +261,10 @@ function App() {
         
         if (accessToken && refreshToken) {
           console.log('Found auth tokens in URL, setting session...');
+          
+          // Clear any existing session first to avoid conflicts
+          await supabase.auth.signOut();
+          
           const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken
@@ -251,47 +272,86 @@ function App() {
           
           if (!error && data.user) {
             await handleAuthSuccess(data.user);
+          } else {
+            console.error('Error setting session from URL tokens:', error);
+            clearAuthState();
           }
           
+          // Clean up URL
           window.history.replaceState({}, document.title, window.location.pathname);
+          setIsInitializing(false);
           return;
         }
 
         // Check for existing session
-        const { data: { session } } = await supabase.auth.getSession();
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
-        if (session) {
+        if (sessionError) {
+          console.error('Error getting session:', sessionError);
+          clearAuthState();
+          setIsInitializing(false);
+          return;
+        }
+        
+        if (session && session.user) {
+          console.log('Found existing session for user:', session.user.id);
+          
+          // Check if session is expired or about to expire
+          const now = Math.floor(Date.now() / 1000);
+          const expiresAt = session.expires_at || 0;
+          
+          if (expiresAt <= now) {
+            console.log('Session expired, clearing auth state');
+            await supabase.auth.signOut();
+            clearAuthState();
+            setIsInitializing(false);
+            return;
+          }
+          
           // Check if we have profile in localStorage first
           const storedProfile = localStorage.getItem('userProfile');
           if (storedProfile) {
             try {
               const profile = JSON.parse(storedProfile);
-              setUserProfile(profile);
-              setIsAuthenticated(true);
-              console.log('Loaded profile from localStorage');
-              
-              // Check for pending time log data
-              const pendingTimeLogData = localStorage.getItem('pendingTimeLog');
-              if (pendingTimeLogData) {
-                try {
-                  const timeLogData = JSON.parse(pendingTimeLogData);
-                  setPendingTimeLog(timeLogData);
-                } catch (e) {
-                  console.error('Error parsing pending time log data:', e);
-                  localStorage.removeItem('pendingTimeLog');
+              // Verify the stored profile matches the current user
+              if (profile.user_id === session.user.id) {
+                setUserProfile(profile);
+                setIsAuthenticated(true);
+                console.log('Loaded profile from localStorage');
+                
+                // Check for pending time log data
+                const pendingTimeLogData = localStorage.getItem('pendingTimeLog');
+                if (pendingTimeLogData) {
+                  try {
+                    const timeLogData = JSON.parse(pendingTimeLogData);
+                    setPendingTimeLog(timeLogData);
+                  } catch (e) {
+                    console.error('Error parsing pending time log data:', e);
+                    localStorage.removeItem('pendingTimeLog');
+                  }
                 }
+              } else {
+                console.log('Stored profile user_id mismatch, refreshing...');
+                localStorage.removeItem('userProfile');
+                await handleAuthSuccess(session.user);
               }
             } catch (e) {
+              console.error('Error parsing stored profile:', e);
               localStorage.removeItem('userProfile');
               await handleAuthSuccess(session.user);
             }
           } else {
             await handleAuthSuccess(session.user);
           }
+        } else {
+          console.log('No active session found');
+          clearAuthState();
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
-        // Don't show error to user, just continue
+        clearAuthState();
+      } finally {
+        setIsInitializing(false);
       }
     };
 
@@ -299,18 +359,18 @@ function App() {
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event);
+      console.log('Auth state changed:', event, session?.user?.id);
       
-      if (event === 'SIGNED_IN' && session) {
+      if (event === 'SIGNED_IN' && session?.user) {
         await handleAuthSuccess(session.user);
       } else if (event === 'SIGNED_OUT') {
-        localStorage.removeItem('userProfile');
-        localStorage.removeItem('pendingTimeLog');
-        setShowDashboard(false);
-        setShowFeed(false);
-        setPendingTimeLog(undefined);
-        setIsAuthenticated(false);
-        setUserProfile(null);
+        clearAuthState();
+      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+        console.log('Token refreshed, updating session');
+        // Don't need to do anything special, just log it
+      } else if (event === 'USER_UPDATED' && session?.user) {
+        console.log('User updated, refreshing profile');
+        await handleAuthSuccess(session.user);
       }
     });
 
@@ -412,8 +472,27 @@ function App() {
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+      clearAuthState();
+    } catch (error) {
+      console.error('Error signing out:', error);
+      // Still clear state even if signOut fails
+      clearAuthState();
+    }
   };
+
+  // Show loading screen during initialization
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen w-full bg-amber-200 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-2xl font-bold text-black italic mb-4">yard</div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto"></div>
+        </div>
+      </div>
+    );
+  }
 
   // Show feed if user is authenticated and wants to see it
   if (showFeed && isAuthenticated) {

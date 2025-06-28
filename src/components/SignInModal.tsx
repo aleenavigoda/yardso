@@ -24,6 +24,12 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
     try {
       console.log('Attempting sign in for:', formData.email);
       
+      // Clear any existing session first to avoid conflicts
+      await supabase.auth.signOut();
+      
+      // Small delay to ensure signOut completes
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       // Sign in with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
         email: formData.email.toLowerCase().trim(),
