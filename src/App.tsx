@@ -184,6 +184,9 @@ function App() {
                 localStorage.removeItem('pendingTimeLog');
               }
             }
+            
+            // AUTOMATICALLY REDIRECT TO DASHBOARD
+            setShowDashboard(true);
             return; // Exit early with cached data
           }
         } catch (e) {
@@ -249,6 +252,9 @@ function App() {
         }
       }
       
+      // AUTOMATICALLY REDIRECT TO DASHBOARD
+      setShowDashboard(true);
+      
       console.log('Auth success completed successfully');
     } catch (error: any) {
       console.error('Error in handleAuthSuccess:', error);
@@ -264,6 +270,9 @@ function App() {
       localStorage.setItem('userProfile', JSON.stringify(basicProfile));
       setUserProfile(basicProfile);
       setIsAuthenticated(true);
+      
+      // AUTOMATICALLY REDIRECT TO DASHBOARD EVEN ON ERROR
+      setShowDashboard(true);
     }
   };
 
@@ -277,17 +286,7 @@ function App() {
     setUserProfile(null);
   };
 
-  // Create a timeout wrapper for getSession
-  const getSessionWithTimeout = (timeoutMs = 10000) => {
-    return Promise.race([
-      supabase.auth.getSession(),
-      new Promise((_, reject) => 
-        setTimeout(() => reject(new Error('Session check timeout')), timeoutMs)
-      )
-    ]);
-  };
-
-  // Fixed auth initialization with timeout for getSession
+  // Simplified auth initialization with shorter timeout and better error handling
   useEffect(() => {
     let isMounted = true;
     
@@ -309,52 +308,56 @@ function App() {
       }
     );
 
-    const initAuth = () => {
+    const initAuth = async () => {
       console.log('Starting auth initialization...');
       
-      // Use the timeout wrapper for getSession
-      getSessionWithTimeout(10000)
-        .then(({ data: { session }, error }) => {
-          if (!isMounted) return;
-          
-          // Handle the specific JWT session error
-          if (error && error.message?.includes('Session from session_id claim in JWT does not exist')) {
-            console.log('Invalid JWT session detected, clearing auth state');
-            supabase.auth.signOut().catch(console.error);
-            clearAuthState();
-            console.log('Auth initialization complete (cleared invalid session)');
-            setIsInitializing(false);
-            return;
-          }
-          
-          if (error) {
-            console.error('Auth session error:', error);
-            clearAuthState();
-            console.log('Auth initialization complete (error case)');
-            setIsInitializing(false);
-            return;
-          }
-          
-          if (session?.user) {
-            console.log('Initial session found for user:', session.user.id);
-            handleAuthSuccess(session.user).catch(error => {
-              console.error('Initial auth success handler failed:', error);
-            });
-          } else {
-            clearAuthState();
-          }
-          
-          console.log('Auth initialization complete');
+      try {
+        // Reduced timeout to 5 seconds to prevent long loading
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Session check timeout')), 5000)
+        );
+        
+        const sessionPromise = supabase.auth.getSession();
+        
+        const { data: { session }, error } = await Promise.race([
+          sessionPromise,
+          timeoutPromise
+        ]) as any;
+        
+        if (!isMounted) return;
+        
+        // Handle the specific JWT session error
+        if (error && error.message?.includes('Session from session_id claim in JWT does not exist')) {
+          console.log('Invalid JWT session detected, clearing auth state');
+          supabase.auth.signOut().catch(console.error);
+          clearAuthState();
           setIsInitializing(false);
-        })
-        .catch(error => {
-          console.error('Auth initialization error (including timeout):', error);
-          if (isMounted) {
-            clearAuthState();
-            console.log('Auth initialization complete (timeout/error case)');
-            setIsInitializing(false);
-          }
-        });
+          return;
+        }
+        
+        if (error) {
+          console.error('Auth session error:', error);
+          clearAuthState();
+          setIsInitializing(false);
+          return;
+        }
+        
+        if (session?.user) {
+          console.log('Initial session found for user:', session.user.id);
+          await handleAuthSuccess(session.user);
+        } else {
+          clearAuthState();
+        }
+        
+        setIsInitializing(false);
+        
+      } catch (error: any) {
+        console.error('Auth initialization error:', error);
+        if (isMounted) {
+          clearAuthState();
+          setIsInitializing(false);
+        }
+      }
     };
 
     // Start initialization
@@ -471,13 +474,14 @@ function App() {
     }
   };
 
-  // Show loading screen during initialization
+  // Show loading screen during initialization (with shorter timeout)
   if (isInitializing) {
     return (
       <div className="min-h-screen w-full bg-amber-200 flex items-center justify-center">
         <div className="text-center">
           <div className="text-2xl font-bold text-black italic mb-4">yard</div>
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto"></div>
+          <div className="text-sm text-gray-600 mt-4">Loading your workyard...</div>
         </div>
       </div>
     );
