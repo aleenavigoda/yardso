@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, User, CheckCircle, XCircle, Plus, Edit, Bell, Mail, Phone } from 'lucide-react';
+import { Clock, User, CheckCircle, XCircle, Plus, Edit, Bell, Mail, Phone, Zap } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import SignOutModal from './SignOutModal';
 import EditProfileModal from './EditProfileModal';
@@ -15,6 +15,11 @@ interface PendingTransaction {
   mode: string;
   created_at: string;
   is_giver: boolean;
+  is_logger: boolean;
+  can_confirm: boolean;
+  can_nudge: boolean;
+  last_nudged_at?: string;
+  nudge_count: number;
 }
 
 interface DashboardProps {
@@ -140,6 +145,36 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
     } catch (error) {
       console.error('Error updating transaction:', error);
       alert('Failed to update transaction. Please try again.');
+    }
+  };
+
+  const handleNudgeTransaction = async (transactionId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: result, error } = await supabase
+        .rpc('nudge_time_transaction', {
+          p_transaction_id: transactionId,
+          p_user_id: user.id
+        });
+
+      if (error) {
+        console.error('Error sending nudge:', error);
+        alert('Failed to send nudge. Please try again.');
+        return;
+      }
+
+      if (result.success) {
+        // Reload pending transactions to update nudge count
+        await loadPendingTransactions();
+        alert(result.message || 'Nudge sent successfully');
+      } else {
+        alert(result.error || 'Failed to send nudge');
+      }
+    } catch (error) {
+      console.error('Error sending nudge:', error);
+      alert('Failed to send nudge. Please try again.');
     }
   };
 
@@ -315,6 +350,24 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
 
   const timeOptions = [0.5, 1, 1.5, 2, 3, 4, 6, 8];
 
+  const formatTimeAgo = (dateString: string) => {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
+    
+    if (diffInHours < 1) return 'just now';
+    if (diffInHours < 24) return `${diffInHours}h ago`;
+    const diffInDays = Math.floor(diffInHours / 24);
+    return `${diffInDays}d ago`;
+  };
+
+  const canNudgeAgain = (lastNudgedAt?: string) => {
+    if (!lastNudgedAt) return true;
+    const lastNudge = new Date(lastNudgedAt);
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    return lastNudge < oneHourAgo;
+  };
+
   return (
     <div className="min-h-screen w-full bg-amber-200">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -413,7 +466,12 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
                             }
                           </p>
                           <p className="text-sm text-gray-600">
-                            {transaction.hours} hour{transaction.hours !== 1 ? 's' : ''} • {new Date(transaction.created_at).toLocaleDateString()}
+                            {transaction.hours} hour{transaction.hours !== 1 ? 's' : ''} • {formatTimeAgo(transaction.created_at)}
+                            {transaction.nudge_count > 0 && (
+                              <span className="ml-2 text-amber-600">
+                                • {transaction.nudge_count} nudge{transaction.nudge_count !== 1 ? 's' : ''} sent
+                              </span>
+                            )}
                           </p>
                         </div>
                       </div>
@@ -424,25 +482,41 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
                   </div>
 
                   <div className="flex gap-3">
-                    <button
-                      onClick={() => handleTransactionAction(transaction.transaction_id, 'confirmed')}
-                      className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors duration-200 text-sm"
-                    >
-                      <CheckCircle size={16} />
-                      Confirm
-                    </button>
-                    <button
-                      onClick={() => {
-                        const reason = prompt('Please provide a reason for disputing this time entry:');
-                        if (reason) {
-                          handleTransactionAction(transaction.transaction_id, 'disputed', reason);
-                        }
-                      }}
-                      className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors duration-200 text-sm"
-                    >
-                      <XCircle size={16} />
-                      Dispute
-                    </button>
+                    {transaction.can_confirm ? (
+                      // Show confirm/dispute for recipients
+                      <>
+                        <button
+                          onClick={() => handleTransactionAction(transaction.transaction_id, 'confirmed')}
+                          className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors duration-200 text-sm"
+                        >
+                          <CheckCircle size={16} />
+                          Confirm
+                        </button>
+                        <button
+                          onClick={() => {
+                            const reason = prompt('Please provide a reason for disputing this time entry:');
+                            if (reason) {
+                              handleTransactionAction(transaction.transaction_id, 'disputed', reason);
+                            }
+                          }}
+                          className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors duration-200 text-sm"
+                        >
+                          <XCircle size={16} />
+                          Dispute
+                        </button>
+                      </>
+                    ) : transaction.can_nudge ? (
+                      // Show nudge for loggers
+                      <button
+                        onClick={() => handleNudgeTransaction(transaction.transaction_id)}
+                        disabled={!canNudgeAgain(transaction.last_nudged_at)}
+                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors duration-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                        title={!canNudgeAgain(transaction.last_nudged_at) ? 'Please wait 1 hour between nudges' : 'Send a friendly reminder'}
+                      >
+                        <Zap size={16} />
+                        {!canNudgeAgain(transaction.last_nudged_at) ? 'Nudged recently' : 'Nudge'}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               ))}
