@@ -277,66 +277,67 @@ function App() {
     setUserProfile(null);
   };
 
-  // Initialize auth state
+  // Initialize auth state with bulletproof error handling
   useEffect(() => {
-    let mounted = true;
-
+    let isMounted = true;
+    
     const initAuth = async () => {
+      console.log('Starting auth initialization...');
+      
       try {
-        console.log('Starting auth initialization...');
-
-        // Get current session
+        // Get initial session
         const { data: { session }, error } = await supabase.auth.getSession();
         
-        if (error) {
-          console.error('Error getting session:', error);
-          if (mounted) {
-            clearAuthState();
-          }
-          return;
-        }
-
+        if (!isMounted) return;
+        
         if (session?.user) {
-          console.log('Found existing session for user:', session.user.id);
-          if (mounted) {
-            await handleAuthSuccess(session.user);
-          }
+          console.log('Initial session found for user:', session.user.id);
+          // Fire and forget - don't await
+          handleAuthSuccess(session.user).catch(error => {
+            console.error('Initial auth success handler failed:', error);
+          });
         } else {
-          console.log('No existing session');
-          if (mounted) {
-            clearAuthState();
-          }
+          clearAuthState();
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
-        if (mounted) {
+        if (isMounted) {
           clearAuthState();
         }
       } finally {
-        console.log('Auth initialization complete');
-        if (mounted) {
+        // ALWAYS complete initialization
+        if (isMounted) {
+          console.log('Auth initialization complete');
           setIsInitializing(false);
         }
       }
     };
 
+    // Set up auth state listener BEFORE initializing
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        console.log('Auth state changed:', event);
+        
+        if (!isMounted) return;
+        
+        if (event === 'SIGNED_IN' && session?.user) {
+          console.log('Handling auth success for user:', session.user.id);
+          // Fire and forget - don't let this block anything
+          handleAuthSuccess(session.user).catch(error => {
+            console.error('Auth state change handler failed:', error);
+          });
+        } else if (event === 'SIGNED_OUT') {
+          clearAuthState();
+        }
+      }
+    );
+
+    // Initialize auth
     initAuth();
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
-      
-      console.log('Auth state changed:', event);
-      
-      if (event === 'SIGNED_IN' && session?.user) {
-        await handleAuthSuccess(session.user);
-      } else if (event === 'SIGNED_OUT') {
-        clearAuthState();
-      }
-    });
-
+    // Cleanup
     return () => {
-      mounted = false;
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, []);
