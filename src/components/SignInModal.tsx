@@ -55,7 +55,7 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
         setError('');
         setIsLoading(false);
         
-        // Close modal - the main App will handle the auth state change
+        // Close modal immediately - the auth state change will be handled by App.tsx
         console.log('Sign in successful, closing modal');
         onClose();
         onSignInSuccess();
@@ -82,8 +82,9 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
   useEffect(() => {
     if (isOpen) {
       setError('');
+      setIsLoading(false); // Reset loading state when modal opens
     } else {
-      // Reset loading state when modal closes
+      // Reset everything when modal closes
       setIsLoading(false);
       setFormData({ email: '', password: '' });
       setError('');
