@@ -16,25 +16,6 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Add timeout protection for sign-in
-  useEffect(() => {
-    let timeoutId: NodeJS.Timeout;
-    
-    if (isLoading) {
-      // Set a 30-second timeout for sign-in
-      timeoutId = setTimeout(() => {
-        setIsLoading(false);
-        setError('Sign in timed out. Please try again.');
-      }, 30000);
-    }
-
-    return () => {
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-    };
-  }, [isLoading]);
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -43,11 +24,21 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
     try {
       console.log('Attempting sign in for:', formData.email);
       
+      // Add timeout to prevent hanging
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Sign in timed out. Please try again.')), 15000)
+      );
+
       // Sign in with Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      const signInPromise = supabase.auth.signInWithPassword({
         email: formData.email.toLowerCase().trim(),
         password: formData.password,
       });
+
+      const { data: authData, error: authError } = await Promise.race([
+        signInPromise,
+        timeoutPromise
+      ]) as any;
 
       if (authError) {
         console.error('Auth error:', authError);
@@ -59,6 +50,8 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
           setError('Please check your email and click the confirmation link before signing in.');
         } else if (authError.message.includes('Too many requests')) {
           setError('Too many sign-in attempts. Please wait a few minutes and try again.');
+        } else if (authError.message.includes('timeout') || authError.message.includes('network')) {
+          setError('Connection timeout. Please check your internet connection and try again.');
         } else {
           setError(authError.message || 'Sign in failed. Please try again.');
         }
@@ -81,7 +74,11 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
       }
     } catch (err: any) {
       console.error('Sign in error:', err);
-      setError('An unexpected error occurred. Please try again.');
+      if (err.message.includes('timeout')) {
+        setError('Sign in timed out. Please try again.');
+      } else {
+        setError('An unexpected error occurred. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -105,6 +102,28 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
       setIsLoading(false);
       setFormData({ email: '', password: '' });
       setError('');
+    }
+  }, [isOpen]);
+
+  // Test Supabase connection when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      const testConnection = async () => {
+        try {
+          const { data, error } = await supabase.from('profiles').select('count').limit(1);
+          if (error) {
+            console.warn('Supabase connection test failed:', error);
+            setError('Connection issue detected. Please refresh the page and try again.');
+          } else {
+            console.log('Supabase connection test successful');
+          }
+        } catch (err) {
+          console.warn('Supabase connection test error:', err);
+          setError('Unable to connect to authentication service. Please refresh the page.');
+        }
+      };
+      
+      testConnection();
     }
   }, [isOpen]);
 
@@ -199,6 +218,13 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
               Forgot your password?
             </button>
           </div>
+
+          {/* Debug info in development */}
+          {process.env.NODE_ENV === 'development' && (
+            <div className="text-xs text-gray-400 text-center">
+              Debug: Check browser console for detailed logs
+            </div>
+          )}
         </div>
       </div>
     </div>

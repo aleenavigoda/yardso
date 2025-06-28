@@ -22,6 +22,7 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
 
   const detectUrlType = (url: string): string => {
     if (url.includes('github.com')) return 'github';
@@ -162,6 +163,7 @@ function App() {
   const handleAuthSuccess = async (user: any) => {
     try {
       console.log('Handling auth success for user:', user.id);
+      setAuthError(null);
       
       // Check if profile exists
       const { data: existingProfile, error: profileError } = await supabase
@@ -229,6 +231,7 @@ function App() {
       console.log('Auth success completed successfully');
     } catch (error: any) {
       console.error('Error in handleAuthSuccess:', error);
+      setAuthError('Failed to load profile data. Please try refreshing the page.');
       // Don't prevent sign-in for profile errors
       console.log('Auth success had errors but continuing...');
     }
@@ -242,9 +245,10 @@ function App() {
     setPendingTimeLog(undefined);
     setIsAuthenticated(false);
     setUserProfile(null);
+    setAuthError(null);
   };
 
-  // Simplified and more robust auth initialization
+  // Improved auth initialization with better error handling
   useEffect(() => {
     let mounted = true;
     let timeoutId: NodeJS.Timeout;
@@ -253,11 +257,11 @@ function App() {
       try {
         console.log('Initializing authentication...');
 
-        // Set a timeout to prevent infinite loading
+        // Set a timeout for the entire auth initialization
         timeoutId = setTimeout(() => {
           if (mounted) {
-            console.log('Auth initialization timeout, clearing state');
-            clearAuthState();
+            console.warn('Auth initialization timed out');
+            setAuthError('Authentication service is taking too long to respond. Please refresh the page.');
             setIsInitializing(false);
           }
         }, 10000); // 10 second timeout
@@ -269,6 +273,7 @@ function App() {
           console.error('Error getting session:', error);
           if (mounted) {
             clearAuthState();
+            setAuthError('Failed to check authentication status. Please refresh the page.');
             setIsInitializing(false);
           }
           return;
@@ -326,15 +331,18 @@ function App() {
             clearAuthState();
           }
         }
+
+        // Clear the timeout if we get here successfully
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
       } catch (error) {
         console.error('Auth initialization error:', error);
         if (mounted) {
           clearAuthState();
+          setAuthError('Failed to initialize authentication. Please refresh the page.');
         }
       } finally {
-        if (timeoutId) {
-          clearTimeout(timeoutId);
-        }
         if (mounted) {
           setIsInitializing(false);
         }
@@ -353,15 +361,6 @@ function App() {
         await handleAuthSuccess(session.user);
       } else if (event === 'SIGNED_OUT') {
         clearAuthState();
-      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-        // Handle token refresh without full re-initialization
-        console.log('Token refreshed for user:', session.user.id);
-        if (userProfile && userProfile.user_id === session.user.id) {
-          // Keep existing state if user hasn't changed
-          console.log('Token refreshed, keeping existing state');
-        } else {
-          await handleAuthSuccess(session.user);
-        }
       }
     });
 
@@ -479,14 +478,24 @@ function App() {
     }
   };
 
-  // Show loading screen during initialization with timeout protection
+  // Show loading screen during initialization
   if (isInitializing) {
     return (
       <div className="min-h-screen w-full bg-amber-200 flex items-center justify-center">
         <div className="text-center">
           <div className="text-2xl font-bold text-black italic mb-4">yard</div>
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto"></div>
-          <p className="text-sm text-gray-600 mt-4">Loading your workyard...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto mb-4"></div>
+          {authError && (
+            <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded max-w-md mx-auto">
+              <p className="text-sm">{authError}</p>
+              <button 
+                onClick={() => window.location.reload()} 
+                className="mt-2 text-red-800 underline text-sm"
+              >
+                Refresh Page
+              </button>
+            </div>
+          )}
         </div>
       </div>
     );
