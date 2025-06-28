@@ -67,27 +67,23 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
 
       console.log('Prepared URLs:', urlsData);
 
-      // Try direct insert first (simpler approach)
-      console.log('Inserting pending profile directly...');
+      // Use the RPC function to insert pending profile data
+      console.log('Calling RPC function to insert pending profile...');
       
-      const { data: pendingProfile, error: pendingError } = await supabase
-        .from('pending_profiles')
-        .insert({
-          email: formData.email.toLowerCase().trim(),
-          full_name: formData.fullName.trim(),
-          display_name: formData.fullName.trim().split(' ')[0],
-          urls: urlsData,
-          time_logging_data: timeLoggingData || null
-        })
-        .select()
-        .single();
+      const { data: pendingProfileId, error: pendingError } = await supabase.rpc('insert_pending_profile', {
+        p_email: formData.email.toLowerCase().trim(),
+        p_full_name: formData.fullName.trim(),
+        p_display_name: formData.fullName.trim().split(' ')[0],
+        p_urls: JSON.stringify(urlsData),
+        p_time_logging_data: timeLoggingData ? JSON.stringify(timeLoggingData) : null
+      });
 
       if (pendingError) {
-        console.error('Pending profile error:', pendingError);
+        console.error('Pending profile RPC error:', pendingError);
         throw new Error(`Failed to save profile data: ${pendingError.message}`);
       }
 
-      console.log('Pending profile created successfully:', pendingProfile.id);
+      console.log('Pending profile created successfully via RPC, ID:', pendingProfileId);
 
       // Now sign up with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
