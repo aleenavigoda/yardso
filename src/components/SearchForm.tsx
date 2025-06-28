@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Search, ChevronDown, Sparkles } from 'lucide-react';
+import { Search, ChevronDown, Sparkles, Loader2 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 
 interface SearchFormProps {
   searchValue: string;
@@ -17,6 +18,7 @@ interface SearchFormProps {
 
 const SearchForm = ({ searchValue, setSearchValue, onSubmitRequest }: SearchFormProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
     serviceType: 'Design Critique',
     deliverableFormat: 'Live Consultation',
@@ -26,9 +28,37 @@ const SearchForm = ({ searchValue, setSearchValue, onSubmitRequest }: SearchForm
     companyStage: 'Pre-seed'
   });
 
-  const handleGetConnected = () => {
+  const handleGetConnected = async () => {
     if (searchValue.trim()) {
-      setIsExpanded(true);
+      setIsLoading(true);
+      try {
+        // Call the edge function to parse the search query
+        const { data, error } = await supabase.functions.invoke('parse-search-query', {
+          body: { query: searchValue }
+        });
+
+        if (error) {
+          console.error('Error parsing search query:', error);
+          // Fall back to manual expansion if edge function fails
+          setIsExpanded(true);
+        } else {
+          // Update form data with parsed parameters
+          setFormData({
+            serviceType: data.serviceType || 'Design Critique',
+            deliverableFormat: data.deliverableFormat || 'Live Consultation',
+            timeline: data.timeline || 'Immediate',
+            industry: data.industry || 'Technology',
+            timeEstimate: data.timeEstimate || '1-2 hours',
+            companyStage: data.companyStage || 'Pre-seed'
+          });
+          setIsExpanded(true);
+        }
+      } catch (error) {
+        console.error('Error calling parse function:', error);
+        setIsExpanded(true);
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -184,10 +214,20 @@ const SearchForm = ({ searchValue, setSearchValue, onSubmitRequest }: SearchForm
         <div className="flex justify-end">
           <button
             onClick={handleGetConnected}
-            className="bg-black text-white px-8 py-3 rounded-full hover:bg-gray-800 transition-all duration-200 transform hover:scale-105 shadow-lg font-medium flex items-center gap-2"
+            disabled={isLoading || !searchValue.trim()}
+            className="bg-black text-white px-8 py-3 rounded-full hover:bg-gray-800 transition-all duration-200 transform hover:scale-105 shadow-lg font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
           >
-            Get Connected
-            <ChevronDown size={16} />
+            {isLoading ? (
+              <>
+                <Loader2 size={16} className="animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                Get Connected
+                <ChevronDown size={16} />
+              </>
+            )}
           </button>
         </div>
       )}

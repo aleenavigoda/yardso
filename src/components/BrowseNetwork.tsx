@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, MapPin, Clock, Star, Users, ChevronDown, X } from 'lucide-react';
+import { Search, Filter, MapPin, Clock, Star, Users, ChevronDown, X, DollarSign, Calendar, Target } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import AuthenticatedHeader from './AuthenticatedHeader';
 import ProfileModal from './ProfileModal';
@@ -53,6 +53,11 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
   const [showFilters, setShowFilters] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState<NetworkUser | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
+  const [showBountyForm, setShowBountyForm] = useState(false);
+  const [bountyData, setBountyData] = useState({
+    budget: '',
+    description: ''
+  });
   
   const [filters, setFilters] = useState<FilterState>({
     serviceType: searchParams?.serviceType || '',
@@ -251,6 +256,13 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
     setSearchQuery('');
   };
 
+  const handleSubmitBounty = () => {
+    // In a real app, this would create a bounty in the database
+    alert(`Bounty submitted! Budget: ${bountyData.budget}, Description: ${bountyData.description}`);
+    setShowBountyForm(false);
+    setBountyData({ budget: '', description: '' });
+  };
+
   const getInitials = (name: string) => {
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
@@ -268,6 +280,17 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
     if (balance > 0) return 'text-green-600';
     if (balance < 0) return 'text-red-600';
     return 'text-gray-600';
+  };
+
+  const getServiceTypeColor = (serviceType: string) => {
+    const colors = {
+      'Legal Review': 'bg-green-100 text-green-800',
+      'Design Critique': 'bg-blue-100 text-blue-800',
+      'Strategy Consultation': 'bg-purple-100 text-purple-800',
+      'Technical Consultation': 'bg-orange-100 text-orange-800',
+      'Marketing Strategy': 'bg-pink-100 text-pink-800'
+    };
+    return colors[serviceType as keyof typeof colors] || 'bg-gray-100 text-gray-800';
   };
 
   const activeFiltersCount = 
@@ -298,48 +321,116 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
           </p>
         </div>
 
-        {/* Search Parameters Summary (if coming from landing page) */}
+        {/* Search Parameters Summary with Bounty Option */}
         {searchParams && (
           <div className="bg-white rounded-3xl p-6 shadow-lg border border-amber-100 mb-6">
-            <h3 className="font-semibold text-gray-900 mb-4">Your Request</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-              {searchParams.serviceType && (
-                <div>
-                  <span className="text-gray-500">Service Type:</span>
-                  <span className="ml-2 font-medium">{searchParams.serviceType}</span>
+            <div className="flex items-start justify-between mb-4">
+              <div className="flex-1">
+                <div className="flex items-center gap-3 mb-4">
+                  <Target className="w-5 h-5 text-amber-600" />
+                  <h3 className="font-semibold text-gray-900">Your Request</h3>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getServiceTypeColor(searchParams.serviceType || '')}`}>
+                    {searchParams.serviceType}
+                  </span>
                 </div>
-              )}
-              {searchParams.deliverableFormat && (
-                <div>
-                  <span className="text-gray-500">Format:</span>
-                  <span className="ml-2 font-medium">{searchParams.deliverableFormat}</span>
+                
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm mb-4">
+                  {searchParams.deliverableFormat && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">Format:</span>
+                      <span className="font-medium">{searchParams.deliverableFormat}</span>
+                    </div>
+                  )}
+                  {searchParams.timeline && (
+                    <div className="flex items-center gap-2">
+                      <Clock size={14} className="text-gray-400" />
+                      <span className="font-medium">{searchParams.timeline}</span>
+                    </div>
+                  )}
+                  {searchParams.industry && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">Industry:</span>
+                      <span className="font-medium">{searchParams.industry}</span>
+                    </div>
+                  )}
+                  {searchParams.timeEstimate && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">Time:</span>
+                      <span className="font-medium">{searchParams.timeEstimate}</span>
+                    </div>
+                  )}
+                  {searchParams.companyStage && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-500">Stage:</span>
+                      <span className="font-medium">{searchParams.companyStage}</span>
+                    </div>
+                  )}
                 </div>
-              )}
-              {searchParams.timeline && (
-                <div>
-                  <span className="text-gray-500">Timeline:</span>
-                  <span className="ml-2 font-medium">{searchParams.timeline}</span>
-                </div>
-              )}
-              {searchParams.industry && (
-                <div>
-                  <span className="text-gray-500">Industry:</span>
-                  <span className="ml-2 font-medium">{searchParams.industry}</span>
-                </div>
-              )}
-              {searchParams.timeEstimate && (
-                <div>
-                  <span className="text-gray-500">Time Estimate:</span>
-                  <span className="ml-2 font-medium">{searchParams.timeEstimate}</span>
-                </div>
-              )}
-              {searchParams.companyStage && (
-                <div>
-                  <span className="text-gray-500">Company Stage:</span>
-                  <span className="ml-2 font-medium">{searchParams.companyStage}</span>
-                </div>
-              )}
+
+                {searchParams.query && (
+                  <div className="bg-gray-50 rounded-lg p-3 mb-4">
+                    <p className="text-gray-700 text-sm">"{searchParams.query}"</p>
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={() => setShowBountyForm(true)}
+                className="bg-black text-white px-6 py-3 rounded-xl hover:bg-gray-800 transition-colors duration-200 font-medium flex items-center gap-2 ml-4"
+              >
+                <DollarSign size={16} />
+                Submit Bounty
+              </button>
             </div>
+
+            {/* Bounty Form */}
+            {showBountyForm && (
+              <div className="border-t border-gray-200 pt-4 space-y-4">
+                <h4 className="font-medium text-gray-900">Turn your request into a bounty</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Budget Range</label>
+                    <select
+                      value={bountyData.budget}
+                      onChange={(e) => setBountyData({ ...bountyData, budget: e.target.value })}
+                      className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400"
+                    >
+                      <option value="">Select budget range</option>
+                      <option value="$100-300">$100-300</option>
+                      <option value="$300-500">$300-500</option>
+                      <option value="$500-800">$500-800</option>
+                      <option value="$800-1200">$800-1200</option>
+                      <option value="$1200-2000">$1200-2000</option>
+                      <option value="$2000+">$2000+</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Additional Details</label>
+                    <textarea
+                      value={bountyData.description}
+                      onChange={(e) => setBountyData({ ...bountyData, description: e.target.value })}
+                      placeholder="Any additional requirements or context..."
+                      className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 h-20 resize-none"
+                    />
+                  </div>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowBountyForm(false)}
+                    className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors duration-200"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSubmitBounty}
+                    disabled={!bountyData.budget}
+                    className="bg-black text-white px-6 py-2 rounded-xl hover:bg-gray-800 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Submit Bounty
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         )}
 
