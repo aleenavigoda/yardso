@@ -323,70 +323,95 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
 
         {/* Search Parameters Summary with Bounty Option */}
         {searchParams && (
-          <div className="bg-white rounded-3xl p-6 shadow-lg border border-amber-100 mb-6">
+          <div className="bg-white rounded-xl p-4 md:p-6 border border-gray-200 hover:border-gray-300 transition-colors duration-200 mb-6">
             <div className="flex items-start justify-between mb-4">
-              <div className="flex-1">
-                <div className="flex items-center gap-3 mb-4">
-                  <Target className="w-5 h-5 text-amber-600" />
-                  <h3 className="font-semibold text-gray-900">Your Request</h3>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getServiceTypeColor(searchParams.serviceType || '')}`}>
+              <div className="flex-1 min-w-0">
+                <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 mb-2">
+                  <h3 className="text-lg font-semibold text-gray-900 break-words">
+                    {searchParams.query || `${searchParams.serviceType} Request`}
+                  </h3>
+                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getServiceTypeColor(searchParams.serviceType || '')} self-start`}>
                     {searchParams.serviceType}
                   </span>
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm mb-4">
-                  {searchParams.deliverableFormat && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-500">Format:</span>
-                      <span className="font-medium">{searchParams.deliverableFormat}</span>
-                    </div>
-                  )}
-                  {searchParams.timeline && (
-                    <div className="flex items-center gap-2">
-                      <Clock size={14} className="text-gray-400" />
-                      <span className="font-medium">{searchParams.timeline}</span>
-                    </div>
-                  )}
-                  {searchParams.industry && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-500">Industry:</span>
-                      <span className="font-medium">{searchParams.industry}</span>
-                    </div>
-                  )}
-                  {searchParams.timeEstimate && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-500">Time:</span>
-                      <span className="font-medium">{searchParams.timeEstimate}</span>
-                    </div>
-                  )}
-                  {searchParams.companyStage && (
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-500">Stage:</span>
-                      <span className="font-medium">{searchParams.companyStage}</span>
-                    </div>
-                  )}
-                </div>
-
                 {searchParams.query && (
-                  <div className="bg-gray-50 rounded-lg p-3 mb-4">
-                    <p className="text-gray-700 text-sm">"{searchParams.query}"</p>
-                  </div>
+                  <p className="text-gray-600 text-sm mb-3 break-words">
+                    {searchParams.query}
+                  </p>
                 )}
               </div>
+            </div>
 
-              <button
-                onClick={() => setShowBountyForm(true)}
-                className="bg-black text-white px-6 py-3 rounded-xl hover:bg-gray-800 transition-colors duration-200 font-medium flex items-center gap-2 ml-4"
-              >
-                <DollarSign size={16} />
-                Submit Bounty
-              </button>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+              {searchParams.timeEstimate && (
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Clock size={14} className="flex-shrink-0" />
+                  <span className="truncate">{searchParams.timeEstimate}</span>
+                </div>
+              )}
+              {searchParams.timeline && (
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Calendar size={14} className="flex-shrink-0" />
+                  <span className="truncate">{searchParams.timeline}</span>
+                </div>
+              )}
+              {searchParams.deliverableFormat && (
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <Target size={14} className="flex-shrink-0" />
+                  <span className="truncate">{searchParams.deliverableFormat}</span>
+                </div>
+              )}
+              {searchParams.location && (
+                <div className="flex items-center gap-2 text-sm text-gray-600">
+                  <MapPin size={14} className="flex-shrink-0" />
+                  <span className="truncate">Remote</span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3 min-w-0 flex-1">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${getAvatarColor('Your Request')} flex-shrink-0`}>
+                  YR
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="text-sm font-medium text-gray-900 truncate">
+                    Your Request
+                  </div>
+                  <p className="text-xs text-gray-500">Just now</p>
+                </div>
+              </div>
+              
+              {!showBountyForm ? (
+                <button
+                  onClick={() => setShowBountyForm(true)}
+                  className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors duration-200 text-sm font-medium flex-shrink-0 ml-3"
+                >
+                  Submit Bounty
+                </button>
+              ) : (
+                <div className="flex gap-2 ml-3">
+                  <button
+                    onClick={() => setShowBountyForm(false)}
+                    className="px-3 py-2 border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 transition-colors duration-200 text-sm"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSubmitBounty}
+                    disabled={!bountyData.budget}
+                    className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors duration-200 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    Submit Bounty
+                  </button>
+                </div>
+              )}
             </div>
 
             {/* Bounty Form */}
             {showBountyForm && (
-              <div className="border-t border-gray-200 pt-4 space-y-4">
-                <h4 className="font-medium text-gray-900">Turn your request into a bounty</h4>
+              <div className="mt-4 pt-4 border-t border-gray-200 space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">Budget Range</label>
@@ -413,21 +438,6 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
                       className="w-full p-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 h-20 resize-none"
                     />
                   </div>
-                </div>
-                <div className="flex gap-3">
-                  <button
-                    onClick={() => setShowBountyForm(false)}
-                    className="px-4 py-2 border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 transition-colors duration-200"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSubmitBounty}
-                    disabled={!bountyData.budget}
-                    className="bg-black text-white px-6 py-2 rounded-xl hover:bg-gray-800 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    Submit Bounty
-                  </button>
                 </div>
               </div>
             )}
