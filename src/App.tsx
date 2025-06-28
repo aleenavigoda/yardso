@@ -277,82 +277,88 @@ function App() {
     setUserProfile(null);
   };
 
-  // Fixed auth initialization with JWT session error handling
+  // Fixed auth initialization with better error handling
   useEffect(() => {
     let isMounted = true;
     
-    // Set up auth state listener first
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        console.log('Auth state changed:', event);
+    const initAuth = async () => {
+      try {
+        console.log('Starting auth initialization...');
+        
+        // Set up auth state listener first
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(
+          async (event, session) => {
+            console.log('Auth state changed:', event);
+            
+            if (!isMounted) return;
+            
+            if (event === 'SIGNED_IN' && session?.user) {
+              console.log('Handling auth success for user:', session.user.id);
+              try {
+                await handleAuthSuccess(session.user);
+              } catch (error) {
+                console.error('Auth state change handler failed:', error);
+              }
+            } else if (event === 'SIGNED_OUT') {
+              clearAuthState();
+            }
+          }
+        );
+
+        // Get initial session
+        const { data: { session }, error } = await supabase.auth.getSession();
         
         if (!isMounted) return;
         
-        if (event === 'SIGNED_IN' && session?.user) {
-          console.log('Handling auth success for user:', session.user.id);
-          handleAuthSuccess(session.user).catch(error => {
-            console.error('Auth state change handler failed:', error);
-          });
-        } else if (event === 'SIGNED_OUT') {
+        // Handle the specific JWT session error
+        if (error && error.message?.includes('Session from session_id claim in JWT does not exist')) {
+          console.log('Invalid JWT session detected, clearing auth state');
+          // Clear the invalid session and let user sign in fresh
+          await supabase.auth.signOut();
+          clearAuthState();
+          setIsInitializing(false);
+          return;
+        }
+        
+        if (error) {
+          console.error('Auth session error:', error);
+          clearAuthState();
+          setIsInitializing(false);
+          return;
+        }
+        
+        if (session?.user) {
+          console.log('Initial session found for user:', session.user.id);
+          try {
+            await handleAuthSuccess(session.user);
+          } catch (error) {
+            console.error('Initial auth success handler failed:', error);
+          }
+        } else {
           clearAuthState();
         }
-      }
-    );
+        
+        setIsInitializing(false);
+        console.log('Auth initialization complete');
 
-    const initAuth = () => {
-      console.log('Starting auth initialization...');
-      
-      supabase.auth.getSession()
-        .then(({ data: { session }, error }) => {
-          if (!isMounted) return;
-          
-          // Handle the specific JWT session error
-          if (error && error.message?.includes('Session from session_id claim in JWT does not exist')) {
-            console.log('Invalid JWT session detected, clearing auth state');
-            // Clear the invalid session and let user sign in fresh
-            supabase.auth.signOut().catch(console.error);
-            clearAuthState();
-            console.log('Auth initialization complete (cleared invalid session)');
-            setIsInitializing(false);
-            return;
-          }
-          
-          if (error) {
-            console.error('Auth session error:', error);
-            clearAuthState();
-            console.log('Auth initialization complete (error case)');
-            setIsInitializing(false);
-            return;
-          }
-          
-          if (session?.user) {
-            console.log('Initial session found for user:', session.user.id);
-            handleAuthSuccess(session.user).catch(error => {
-              console.error('Initial auth success handler failed:', error);
-            });
-          } else {
-            clearAuthState();
-          }
-          
-          console.log('Auth initialization complete');
+        // Cleanup function
+        return () => {
+          subscription.unsubscribe();
+        };
+        
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+        if (isMounted) {
+          clearAuthState();
           setIsInitializing(false);
-        })
-        .catch(error => {
-          console.error('Auth initialization error:', error);
-          if (isMounted) {
-            clearAuthState();
-            console.log('Auth initialization complete (catch case)');
-            setIsInitializing(false);
-          }
-        });
+        }
+      }
     };
 
-    // Start initialization
     initAuth();
 
     return () => {
       isMounted = false;
-      subscription.unsubscribe();
     };
   }, []);
 
@@ -468,6 +474,9 @@ function App() {
         <div className="text-center">
           <div className="text-2xl font-bold text-black italic mb-4">yard</div>
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto"></div>
+          <div className="mt-4 text-sm text-gray-700">
+            Initializing...
+          </div>
         </div>
       </div>
     );
