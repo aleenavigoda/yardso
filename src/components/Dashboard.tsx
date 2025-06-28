@@ -1,11 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, User, CheckCircle, XCircle, Plus, Edit } from 'lucide-react';
+import { Clock, User, CheckCircle, XCircle, Plus, Edit, Bell, Mail, Phone } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import SignOutModal from './SignOutModal';
 import EditProfileModal from './EditProfileModal';
 import TimeLoggingModal from './TimeLoggingModal';
 import AuthenticatedHeader from './AuthenticatedHeader';
 import type { TimeLoggingData, Profile, ProfileUrl } from '../types';
+
+interface PendingTransaction {
+  transaction_id: string;
+  other_person_name: string;
+  hours: number;
+  description: string;
+  mode: string;
+  created_at: string;
+  is_giver: boolean;
+}
 
 interface DashboardProps {
   onBack: () => void;
@@ -17,6 +27,7 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileUrls, setProfileUrls] = useState<ProfileUrl[]>([]);
   const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | null>(null);
+  const [pendingTransactions, setPendingTransactions] = useState<PendingTransaction[]>([]);
   const [isLoggingTime, setIsLoggingTime] = useState(false);
   const [isSignOutModalOpen, setIsSignOutModalOpen] = useState(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
@@ -31,6 +42,7 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
 
   useEffect(() => {
     loadProfileData();
+    loadPendingTransactions();
   }, []);
 
   const loadProfileData = async () => {
@@ -64,6 +76,70 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
         contact: logData.contact,
         description: logData.description
       });
+    }
+  };
+
+  const loadPendingTransactions = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: transactions, error } = await supabase
+        .rpc('get_pending_time_transactions', { p_user_id: user.id });
+
+      if (error) {
+        console.error('Error loading pending transactions:', error);
+        return;
+      }
+
+      setPendingTransactions(transactions || []);
+    } catch (error) {
+      console.error('Error loading pending transactions:', error);
+    }
+  };
+
+  const handleTransactionAction = async (transactionId: string, action: 'confirmed' | 'disputed', disputeReason?: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: result, error } = await supabase
+        .rpc('update_time_transaction_status', {
+          p_transaction_id: transactionId,
+          p_user_id: user.id,
+          p_status: action,
+          p_dispute_reason: disputeReason || null
+        });
+
+      if (error) {
+        console.error('Error updating transaction:', error);
+        alert('Failed to update transaction. Please try again.');
+        return;
+      }
+
+      if (result.success) {
+        // Reload pending transactions
+        await loadPendingTransactions();
+        
+        // Reload profile to get updated time balance
+        const { data: updatedProfile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('user_id', user.id)
+          .single();
+        
+        if (updatedProfile) {
+          setProfile(updatedProfile);
+          localStorage.setItem('userProfile', JSON.stringify(updatedProfile));
+        }
+
+        alert(result.message || `Transaction ${action} successfully`);
+      } else {
+        alert(result.error || 'Failed to update transaction');
+      }
+    } catch (error) {
+      console.error('Error updating transaction:', error);
+      alert('Failed to update transaction. Please try again.');
     }
   };
 
@@ -229,6 +305,8 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
       }
 
       setIsTimeLoggingOpen(false);
+      // Reload pending transactions to show any new ones
+      await loadPendingTransactions();
     } catch (error) {
       console.error('Error logging time:', error);
       alert('Error logging time. Please try again.');
@@ -307,6 +385,70 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
             </div>
           )}
         </div>
+
+        {/* Pending Time Transactions */}
+        {pendingTransactions.length > 0 && (
+          <div className="bg-white rounded-3xl p-8 shadow-lg mb-8 border border-amber-100">
+            <div className="flex items-center gap-3 mb-6">
+              <Bell className="w-5 h-5 text-amber-600" />
+              <h2 className="font-semibold text-gray-900 text-lg">
+                Pending Time Confirmations
+              </h2>
+            </div>
+
+            <div className="space-y-4">
+              {pendingTransactions.map((transaction) => (
+                <div key={transaction.transaction_id} className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="bg-blue-100 w-8 h-8 rounded-full flex items-center justify-center">
+                          <Clock className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="font-medium text-gray-900">
+                            {transaction.mode === 'helped' 
+                              ? `You helped ${transaction.other_person_name}`
+                              : `${transaction.other_person_name} helped you`
+                            }
+                          </p>
+                          <p className="text-sm text-gray-600">
+                            {transaction.hours} hour{transaction.hours !== 1 ? 's' : ''} • {new Date(transaction.created_at).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </div>
+                      {transaction.description && (
+                        <p className="text-gray-700 text-sm mb-3">"{transaction.description}"</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-3">
+                    <button
+                      onClick={() => handleTransactionAction(transaction.transaction_id, 'confirmed')}
+                      className="flex items-center gap-2 bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition-colors duration-200 text-sm"
+                    >
+                      <CheckCircle size={16} />
+                      Confirm
+                    </button>
+                    <button
+                      onClick={() => {
+                        const reason = prompt('Please provide a reason for disputing this time entry:');
+                        if (reason) {
+                          handleTransactionAction(transaction.transaction_id, 'disputed', reason);
+                        }
+                      }}
+                      className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors duration-200 text-sm"
+                    >
+                      <XCircle size={16} />
+                      Dispute
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Pending Time Log */}
         {pendingTimeLog && (

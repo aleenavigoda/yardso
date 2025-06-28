@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { X, Clock, User, MessageSquare, Plus, Minus, CheckCircle } from 'lucide-react';
+import { X, Clock, User, MessageSquare, Plus, Minus, CheckCircle, Loader2 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import type { TimeLoggingData } from '../types';
 
 interface TimeLoggingModalProps {
@@ -17,37 +18,173 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
   const [contact, setContact] = useState('');
   const [description, setDescription] = useState('');
   const [isLogging, setIsLogging] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   const timeOptions = [0.5, 1, 1.5, 2, 3, 4, 6, 8];
 
-  const handleSubmit = async () => {
-    const timeLoggingData: TimeLoggingData = {
-      mode,
-      hours,
-      name,
-      contact,
-      description
-    };
+  const isValidEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
 
-    if (isAuthenticated && onLogTime) {
-      setIsLogging(true);
-      try {
-        await onLogTime(timeLoggingData);
-        // Reset form on success
-        setMode('helped');
-        setHours(1);
-        setName('');
-        setContact('');
-        setDescription('');
-      } finally {
-        setIsLogging(false);
-      }
-    } else {
+  const isValidPhone = (phone: string) => {
+    return /^[\+]?[1-9][\d]{0,15}$/.test(phone.replace(/[\s\-\(\)]/g, ''));
+  };
+
+  const handleSubmit = async () => {
+    if (!isAuthenticated) {
+      // If not authenticated, trigger signup flow
+      const timeLoggingData: TimeLoggingData = {
+        mode,
+        hours,
+        name,
+        contact,
+        description
+      };
       onSignUp(timeLoggingData);
+      return;
+    }
+
+    // If authenticated, handle the time logging
+    setIsLogging(true);
+    setSuccessMessage('');
+
+    try {
+      // Get current user profile
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('User not authenticated');
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .eq('user_id', user.id)
+        .single();
+
+      if (!profile) throw new Error('Profile not found');
+
+      // Check if the contact is an existing user by email
+      let existingProfile = null;
+      if (isValidEmail(contact)) {
+        const { data: existingUser } = await supabase
+          .from('profiles')
+          .select('id, user_id, email, full_name')
+          .eq('email', contact)
+          .single();
+        
+        existingProfile = existingUser;
+      }
+
+      if (existingProfile) {
+        // User exists - create direct time transaction
+        const { error: transactionError } = await supabase
+          .from('time_transactions')
+          .insert({
+            giver_id: mode === 'helped' ? profile.id : existingProfile.id,
+            receiver_id: mode === 'helped' ? existingProfile.id : profile.id,
+            hours: hours,
+            description: description || null,
+            service_type: 'general',
+            logged_by: profile.id,
+            status: 'pending'
+          });
+
+        if (transactionError) throw transactionError;
+
+        // Create notification for the other user
+        const { error: notificationError } = await supabase
+          .from('transaction_notifications')
+          .insert({
+            transaction_id: null, // Will be updated by trigger
+            recipient_id: existingProfile.id,
+            notification_type: 'time_logged',
+            title: 'Time logged for your review',
+            message: `${profile.full_name} logged ${hours} hour${hours !== 1 ? 's' : ''} of ${mode === 'helped' ? 'helping you' : 'time you spent helping them'}${description ? `: "${description}"` : ''}`
+          });
+
+        if (notificationError) console.warn('Failed to create notification:', notificationError);
+
+        setSuccessMessage(`Time logged successfully! ${existingProfile.full_name} will be notified to confirm.`);
+      } else {
+        // User doesn't exist - create invitation and pending time log
+        const { data: invitationData, error: invitationError } = await supabase
+          .rpc('create_invitation_with_time_log', {
+            p_inviter_profile_id: profile.id,
+            p_invitee_email: isValidEmail(contact) ? contact : '',
+            p_invitee_name: name,
+            p_invitee_contact: contact,
+            p_hours: hours,
+            p_description: description || null,
+            p_service_type: 'general',
+            p_mode: mode
+          });
+
+        if (invitationError) throw invitationError;
+
+        // Send email/SMS notification (this would be handled by a background job in production)
+        await sendInvitationNotification(contact, name, profile.full_name, hours, mode);
+
+        setSuccessMessage(`Invitation sent to ${name}! They'll receive a ${isValidEmail(contact) ? 'email' : 'text'} to join Yard and confirm the time log.`);
+      }
+
+      // Reset form
+      setMode('helped');
+      setHours(1);
+      setName('');
+      setContact('');
+      setDescription('');
+
+      // Close modal after showing success message
+      setTimeout(() => {
+        setSuccessMessage('');
+        onClose();
+      }, 3000);
+
+    } catch (error: any) {
+      console.error('Error logging time:', error);
+      setSuccessMessage('');
+      alert('Error logging time. Please try again.');
+    } finally {
+      setIsLogging(false);
     }
   };
 
-  const isFormValid = name.trim() !== '' && contact.trim() !== '';
+  const sendInvitationNotification = async (contact: string, name: string, inviterName: string, hours: number, mode: string) => {
+    try {
+      // In a real app, this would trigger an email/SMS service
+      // For now, we'll call an edge function to handle notifications
+      const { error } = await supabase.functions.invoke('send-invitation', {
+        body: {
+          contact,
+          name,
+          inviterName,
+          hours,
+          mode,
+          type: isValidEmail(contact) ? 'email' : 'sms'
+        }
+      });
+
+      if (error) {
+        console.warn('Failed to send invitation notification:', error);
+      }
+    } catch (error) {
+      console.warn('Failed to send invitation notification:', error);
+    }
+  };
+
+  const resetForm = () => {
+    setMode('helped');
+    setHours(1);
+    setName('');
+    setContact('');
+    setDescription('');
+    setSuccessMessage('');
+  };
+
+  const handleClose = () => {
+    resetForm();
+    onClose();
+  };
+
+  const isFormValid = name.trim() !== '' && contact.trim() !== '' && (isValidEmail(contact) || isValidPhone(contact));
 
   if (!isOpen) return null;
 
@@ -55,7 +192,7 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
       <div className="bg-white rounded-3xl p-6 max-w-lg w-full relative animate-scale-in shadow-2xl my-8 max-h-[90vh] overflow-y-auto">
         <button
-          onClick={onClose}
+          onClick={handleClose}
           className="absolute right-4 top-4 text-gray-400 hover:text-gray-600 transition-colors duration-200 z-10"
           aria-label="Close modal"
         >
@@ -87,6 +224,15 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
             </div>
           )}
 
+          {successMessage && (
+            <div className="bg-green-50 rounded-xl p-3 border border-green-200">
+              <div className="flex items-start gap-2">
+                <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                <p className="text-green-800 text-sm">{successMessage}</p>
+              </div>
+            </div>
+          )}
+
           <div className="bg-gray-50 rounded-xl p-2">
             <div className="flex gap-2">
               <button
@@ -96,6 +242,7 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
                     : 'bg-transparent text-gray-600 hover:bg-gray-100'
                 }`}
                 onClick={() => setMode('helped')}
+                disabled={isLogging}
               >
                 I helped someone
               </button>
@@ -106,6 +253,7 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
                     : 'bg-transparent text-gray-600 hover:bg-gray-100'
                 }`}
                 onClick={() => setMode('wasHelped')}
+                disabled={isLogging}
               >
                 Someone helped me
               </button>
@@ -134,6 +282,14 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
                 className="w-full p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200 text-sm"
                 disabled={isLogging}
               />
+              <p className="text-xs text-gray-500 mt-1">
+                {isValidEmail(contact) 
+                  ? "We'll check if they're already on Yard or send an email invitation"
+                  : isValidPhone(contact)
+                  ? "They'll receive an SMS invitation to join Yard"
+                  : "Enter a valid email address or phone number"
+                }
+              </p>
             </div>
 
             <div>
@@ -205,7 +361,7 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
           >
             {isLogging ? (
               <>
-                <Clock size={16} className="animate-spin" />
+                <Loader2 size={16} className="animate-spin" />
                 Processing...
               </>
             ) : isAuthenticated ? (
