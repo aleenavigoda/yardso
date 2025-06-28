@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, Clock, Users, ArrowUpDown } from 'lucide-react';
+import { TrendingUp, Clock, Users, ArrowUpDown, Search, MapPin, DollarSign, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import AuthenticatedHeader from './AuthenticatedHeader';
 
@@ -44,6 +44,22 @@ interface GroupedTransaction {
   is_balanced?: boolean;
 }
 
+interface WorkBounty {
+  id: string;
+  title: string;
+  description: string;
+  service_type: string;
+  timeline: string;
+  industry: string;
+  time_estimate: string;
+  company_stage: string;
+  budget_range?: string;
+  location?: string;
+  posted_by: string;
+  posted_at: string;
+  status: 'open' | 'in_progress' | 'completed';
+}
+
 interface FeedProps {
   onBack: () => void;
   onDashboardClick: () => void;
@@ -51,15 +67,22 @@ interface FeedProps {
 }
 
 const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
+  const [activeTab, setActiveTab] = useState<'flows' | 'discover'>('flows');
   const [transactions, setTransactions] = useState<GroupedTransaction[]>([]);
+  const [bounties, setBounties] = useState<WorkBounty[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadTransactions();
-  }, []);
+    if (activeTab === 'flows') {
+      loadTransactions();
+    } else {
+      loadBounties();
+    }
+  }, [activeTab]);
 
   const loadTransactions = async () => {
     try {
+      setIsLoading(true);
       // Get recent confirmed transactions from regular users
       const { data: userTransactions, error: userError } = await supabase
         .from('time_transactions')
@@ -121,6 +144,96 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
       setTransactions(withBalanceInfo);
     } catch (error) {
       console.error('Error loading transactions:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const loadBounties = async () => {
+    try {
+      setIsLoading(true);
+      // Mock data for work bounties - in a real app, this would come from a database
+      const mockBounties: WorkBounty[] = [
+        {
+          id: '1',
+          title: 'Legal review of Series A term sheet',
+          description: 'Need an experienced startup lawyer to review our Series A term sheet. Looking for someone who has worked with VCs before and can spot potential issues.',
+          service_type: 'Legal Review',
+          timeline: 'Within 48 hours',
+          industry: 'Technology',
+          time_estimate: '2-3 hours',
+          company_stage: 'Series A',
+          budget_range: '$500-800',
+          location: 'Remote',
+          posted_by: 'Sarah Chen',
+          posted_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2 hours ago
+          status: 'open'
+        },
+        {
+          id: '2',
+          title: 'UX critique on social app interface',
+          description: 'Looking for a senior UX designer to provide detailed feedback on our social networking app. Need someone with experience in mobile-first design.',
+          service_type: 'Design Critique',
+          timeline: 'This week',
+          industry: 'Technology',
+          time_estimate: '1-2 hours',
+          company_stage: 'Seed',
+          budget_range: '$300-500',
+          location: 'Remote',
+          posted_by: 'Mike Rodriguez',
+          posted_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(), // 4 hours ago
+          status: 'open'
+        },
+        {
+          id: '3',
+          title: 'Due diligence for biotech venture',
+          description: 'Need help conducting due diligence on an early-stage biotech company. Looking for someone with life sciences background and investment experience.',
+          service_type: 'Strategy Consultation',
+          timeline: 'Next week',
+          industry: 'Healthcare',
+          time_estimate: 'Multiple days',
+          company_stage: 'Pre-seed',
+          budget_range: '$2000-3000',
+          location: 'San Francisco, CA',
+          posted_by: 'Alex Kim',
+          posted_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(), // 6 hours ago
+          status: 'open'
+        },
+        {
+          id: '4',
+          title: 'LLM integration strategy session',
+          description: 'Help me understand how to integrate LLMs into our existing product. Need someone with hands-on experience with OpenAI API and prompt engineering.',
+          service_type: 'Technical Consultation',
+          timeline: 'Flexible',
+          industry: 'Technology',
+          time_estimate: '2-4 hours',
+          company_stage: 'Seed',
+          budget_range: '$400-600',
+          location: 'Remote',
+          posted_by: 'Rachel Park',
+          posted_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(), // 8 hours ago
+          status: 'open'
+        },
+        {
+          id: '5',
+          title: 'Marketing strategy for B2B SaaS',
+          description: 'Looking for a marketing expert to help develop our go-to-market strategy for a new B2B SaaS product. Need someone with experience in enterprise sales.',
+          service_type: 'Marketing Strategy',
+          timeline: 'Within a week',
+          industry: 'Technology',
+          time_estimate: 'Half day',
+          company_stage: 'Series A',
+          budget_range: '$800-1200',
+          location: 'New York, NY',
+          posted_by: 'David Chen',
+          posted_at: new Date(Date.now() - 12 * 60 * 60 * 1000).toISOString(), // 12 hours ago
+          status: 'open'
+        }
+      ];
+      
+      setBounties(mockBounties);
+    } catch (error) {
+      console.error('Error loading bounties:', error);
     } finally {
       setIsLoading(false);
     }
@@ -254,6 +367,183 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
     return colors[index % colors.length];
   };
 
+  const getBountyTypeColor = (serviceType: string) => {
+    const colors = {
+      'Legal Review': 'bg-green-100 text-green-800',
+      'Design Critique': 'bg-blue-100 text-blue-800',
+      'Strategy Consultation': 'bg-purple-100 text-purple-800',
+      'Technical Consultation': 'bg-orange-100 text-orange-800',
+      'Marketing Strategy': 'bg-pink-100 text-pink-800'
+    };
+    return colors[serviceType as keyof typeof colors] || 'bg-gray-100 text-gray-800';
+  };
+
+  const renderTimeFlows = () => (
+    <div className="space-y-6">
+      {transactions.map((transaction) => (
+        <div key={transaction.id} className="flex items-start gap-4 p-4 hover:bg-gray-50 rounded-xl transition-colors duration-200">
+          {/* Avatar(s) */}
+          <div className="flex items-center">
+            {transaction.is_group ? (
+              <div className="flex -space-x-2">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium ${getAvatarColor(transaction.giver.full_name)} border-2 border-white`}>
+                  {getInitials(transaction.giver.display_name)}
+                </div>
+                <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 text-xs font-medium border-2 border-white">
+                  <Users size={12} />
+                </div>
+                {transaction.receivers.slice(0, 2).map((receiver, index) => (
+                  <div key={receiver.id} className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium ${getAvatarColor(receiver.full_name)} border-2 border-white`}>
+                    {getInitials(receiver.display_name)}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="flex items-center">
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium ${getAvatarColor(transaction.giver.full_name)}`}>
+                  {getInitials(transaction.giver.display_name)}
+                </div>
+                {transaction.is_balanced && (
+                  <div className="mx-2">
+                    <ArrowUpDown size={16} className="text-green-600" />
+                  </div>
+                )}
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium ${getAvatarColor(transaction.receivers[0].full_name)}`}>
+                  {getInitials(transaction.receivers[0].display_name)}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <span className="font-medium text-gray-900">
+                {transaction.giver.display_name}
+              </span>
+              <span className="text-gray-600">
+                {transaction.is_group ? 'facilitated' : (transaction.is_balanced ? 'exchanged' : 'provided')}
+              </span>
+              <span className={`font-medium ${getServiceTypeColor(transaction.service_type)}`}>
+                {transaction.hours}h {getServiceTypeLabel(transaction.service_type)}
+              </span>
+              <span className="text-gray-600">
+                {transaction.is_group ? 'with' : (transaction.is_balanced ? 'with' : 'to')}
+              </span>
+              {transaction.is_group ? (
+                <span className="font-medium text-gray-900">
+                  {transaction.receivers.map(r => r.display_name).join(', ')}
+                  {transaction.receivers.length > 2 && ` and ${transaction.receivers.length - 2} others`}
+                </span>
+              ) : (
+                <span className="font-medium text-gray-900">
+                  {transaction.receivers[0].display_name}
+                </span>
+              )}
+            </div>
+            
+            <div className="flex items-center gap-4 text-sm text-gray-500">
+              <span>"{transaction.description}"</span>
+              <span>•</span>
+              <span>{formatTimeAgo(transaction.created_at)}</span>
+            </div>
+          </div>
+
+          {/* Status Badge */}
+          <div className="flex-shrink-0">
+            {transaction.is_balanced && !transaction.is_group ? (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                Balanced
+              </span>
+            ) : transaction.is_group ? (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
+                Group
+              </span>
+            ) : (
+              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                +{transaction.hours}h
+              </span>
+            )}
+          </div>
+        </div>
+      ))}
+
+      {transactions.length === 0 && !isLoading && (
+        <div className="text-center py-8">
+          <Clock className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <p className="text-gray-500">No recent time flows to show</p>
+          <p className="text-gray-400 text-sm">Time transactions will appear here as they're confirmed</p>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderDiscover = () => (
+    <div className="space-y-6">
+      {bounties.map((bounty) => (
+        <div key={bounty.id} className="bg-white rounded-xl p-6 border border-gray-200 hover:border-gray-300 transition-colors duration-200">
+          <div className="flex items-start justify-between mb-4">
+            <div className="flex-1">
+              <div className="flex items-center gap-3 mb-2">
+                <h3 className="text-lg font-semibold text-gray-900">{bounty.title}</h3>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getBountyTypeColor(bounty.service_type)}`}>
+                  {bounty.service_type}
+                </span>
+              </div>
+              <p className="text-gray-600 text-sm mb-3">{bounty.description}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <Clock size={14} />
+              <span>{bounty.time_estimate}</span>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-gray-600">
+              <Calendar size={14} />
+              <span>{bounty.timeline}</span>
+            </div>
+            {bounty.budget_range && (
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <DollarSign size={14} />
+                <span>{bounty.budget_range}</span>
+              </div>
+            )}
+            {bounty.location && (
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <MapPin size={14} />
+                <span>{bounty.location}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${getAvatarColor(bounty.posted_by)}`}>
+                {getInitials(bounty.posted_by)}
+              </div>
+              <div>
+                <p className="text-sm font-medium text-gray-900">{bounty.posted_by}</p>
+                <p className="text-xs text-gray-500">{formatTimeAgo(bounty.posted_at)}</p>
+              </div>
+            </div>
+            <button className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors duration-200 text-sm font-medium">
+              Apply
+            </button>
+          </div>
+        </div>
+      ))}
+
+      {bounties.length === 0 && !isLoading && (
+        <div className="text-center py-8">
+          <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+          <p className="text-gray-500">No open bounties available</p>
+          <p className="text-gray-400 text-sm">New work opportunities will appear here</p>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="min-h-screen w-full bg-amber-200">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -266,11 +556,48 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
           onHomeClick={onBack}
         />
 
-        {/* Feed Content */}
+        {/* Tabs */}
+        <div className="bg-white rounded-2xl p-2 mb-6 shadow-sm border border-amber-100">
+          <div className="flex gap-2">
+            <button
+              onClick={() => setActiveTab('flows')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
+                activeTab === 'flows'
+                  ? 'bg-black text-white shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <TrendingUp size={16} />
+              <span>Time Flows</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('discover')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-medium transition-all duration-200 ${
+                activeTab === 'discover'
+                  ? 'bg-black text-white shadow-sm'
+                  : 'text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <Search size={16} />
+              <span>Discover</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
         <div className="bg-white rounded-3xl p-8 shadow-lg border border-amber-100">
           <div className="flex items-center gap-3 mb-6">
-            <TrendingUp className="w-5 h-5 text-amber-600" />
-            <h2 className="font-semibold text-gray-900 text-lg">Recent Time Flows</h2>
+            {activeTab === 'flows' ? (
+              <>
+                <TrendingUp className="w-5 h-5 text-amber-600" />
+                <h2 className="font-semibold text-gray-900 text-lg">Recent Time Flows</h2>
+              </>
+            ) : (
+              <>
+                <Search className="w-5 h-5 text-amber-600" />
+                <h2 className="font-semibold text-gray-900 text-lg">Open Work Bounties</h2>
+              </>
+            )}
           </div>
 
           {isLoading ? (
@@ -288,103 +615,7 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
               ))}
             </div>
           ) : (
-            <div className="space-y-6">
-              {transactions.map((transaction) => (
-                <div key={transaction.id} className="flex items-start gap-4 p-4 hover:bg-gray-50 rounded-xl transition-colors duration-200">
-                  {/* Avatar(s) */}
-                  <div className="flex items-center">
-                    {transaction.is_group ? (
-                      <div className="flex -space-x-2">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium ${getAvatarColor(transaction.giver.full_name)} border-2 border-white`}>
-                          {getInitials(transaction.giver.display_name)}
-                        </div>
-                        <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 text-xs font-medium border-2 border-white">
-                          <Users size={12} />
-                        </div>
-                        {transaction.receivers.slice(0, 2).map((receiver, index) => (
-                          <div key={receiver.id} className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium ${getAvatarColor(receiver.full_name)} border-2 border-white`}>
-                            {getInitials(receiver.display_name)}
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="flex items-center">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium ${getAvatarColor(transaction.giver.full_name)}`}>
-                          {getInitials(transaction.giver.display_name)}
-                        </div>
-                        {transaction.is_balanced && (
-                          <div className="mx-2">
-                            <ArrowUpDown size={16} className="text-green-600" />
-                          </div>
-                        )}
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium ${getAvatarColor(transaction.receivers[0].full_name)}`}>
-                          {getInitials(transaction.receivers[0].display_name)}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="font-medium text-gray-900">
-                        {transaction.giver.display_name}
-                      </span>
-                      <span className="text-gray-600">
-                        {transaction.is_group ? 'facilitated' : (transaction.is_balanced ? 'exchanged' : 'provided')}
-                      </span>
-                      <span className={`font-medium ${getServiceTypeColor(transaction.service_type)}`}>
-                        {transaction.hours}h {getServiceTypeLabel(transaction.service_type)}
-                      </span>
-                      <span className="text-gray-600">
-                        {transaction.is_group ? 'with' : (transaction.is_balanced ? 'with' : 'to')}
-                      </span>
-                      {transaction.is_group ? (
-                        <span className="font-medium text-gray-900">
-                          {transaction.receivers.map(r => r.display_name).join(', ')}
-                          {transaction.receivers.length > 2 && ` and ${transaction.receivers.length - 2} others`}
-                        </span>
-                      ) : (
-                        <span className="font-medium text-gray-900">
-                          {transaction.receivers[0].display_name}
-                        </span>
-                      )}
-                    </div>
-                    
-                    <div className="flex items-center gap-4 text-sm text-gray-500">
-                      <span>"{transaction.description}"</span>
-                      <span>•</span>
-                      <span>{formatTimeAgo(transaction.created_at)}</span>
-                    </div>
-                  </div>
-
-                  {/* Status Badge */}
-                  <div className="flex-shrink-0">
-                    {transaction.is_balanced && !transaction.is_group ? (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                        Balanced
-                      </span>
-                    ) : transaction.is_group ? (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-                        Group
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        +{transaction.hours}h
-                      </span>
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              {transactions.length === 0 && (
-                <div className="text-center py-8">
-                  <Clock className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                  <p className="text-gray-500">No recent time flows to show</p>
-                  <p className="text-gray-400 text-sm">Time transactions will appear here as they're confirmed</p>
-                </div>
-              )}
-            </div>
+            activeTab === 'flows' ? renderTimeFlows() : renderDiscover()
           )}
         </div>
       </div>
