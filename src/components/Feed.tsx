@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { TrendingUp, Clock, Users, ArrowUpDown, ArrowLeft } from 'lucide-react';
+import { TrendingUp, Clock, Users, ArrowUpDown } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import AuthenticatedHeader from './AuthenticatedHeader';
 
 interface TimeTransaction {
   id: string;
@@ -45,9 +46,11 @@ interface GroupedTransaction {
 
 interface FeedProps {
   onBack: () => void;
+  onDashboardClick: () => void;
+  onSignOut: () => void;
 }
 
-const Feed = ({ onBack }: FeedProps) => {
+const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
   const [transactions, setTransactions] = useState<GroupedTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -255,15 +258,13 @@ const Feed = ({ onBack }: FeedProps) => {
     <div className="min-h-screen w-full bg-amber-200">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         {/* Header */}
-        <header className="flex justify-between items-center mb-8">
-          <button
-            onClick={onBack}
-            className="flex items-center gap-2 text-black hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
-          >
-            <ArrowLeft size={16} />
-            <span className="text-2xl font-bold italic">yard</span>
-          </button>
-        </header>
+        <AuthenticatedHeader
+          currentPage="feed"
+          onFeedClick={() => {}} // Already on feed
+          onDashboardClick={onDashboardClick}
+          onSignOut={onSignOut}
+          onHomeClick={onBack}
+        />
 
         {/* Feed Content */}
         <div className="bg-white rounded-3xl p-8 shadow-lg border border-amber-100">

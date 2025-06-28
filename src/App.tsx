@@ -489,12 +489,23 @@ function App() {
 
   // Show feed if user is authenticated and wants to see it
   if (showFeed && isAuthenticated) {
-    return <Feed onBack={handleBackToHome} />;
+    return (
+      <Feed 
+        onBack={handleBackToHome} 
+        onDashboardClick={handleDashboardClick}
+        onSignOut={handleSignOut}
+      />
+    );
   }
 
   // Show dashboard if user is authenticated and wants to see it
   if (showDashboard && isAuthenticated) {
-    return <Dashboard onBack={handleBackToHome} />;
+    return (
+      <Dashboard 
+        onBack={handleBackToHome} 
+        onFeedClick={handleFeedClick}
+      />
+    );
   }
 
   return (

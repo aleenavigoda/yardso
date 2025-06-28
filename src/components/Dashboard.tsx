@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, User, CheckCircle, XCircle, Plus, LogOut, Mail, Phone, Edit, Home, BarChart3 } from 'lucide-react';
+import { Clock, User, CheckCircle, XCircle, Plus, Edit } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import SignOutModal from './SignOutModal';
 import EditProfileModal from './EditProfileModal';
 import TimeLoggingModal from './TimeLoggingModal';
+import AuthenticatedHeader from './AuthenticatedHeader';
 import type { TimeLoggingData, Profile, ProfileUrl } from '../types';
 
 interface DashboardProps {
   onBack: () => void;
+  onFeedClick: () => void;
 }
 
-const Dashboard = ({ onBack }: DashboardProps) => {
+const Dashboard = ({ onBack, onFeedClick }: DashboardProps) => {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [profileUrls, setProfileUrls] = useState<ProfileUrl[]>([]);
   const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | null>(null);
@@ -18,7 +20,6 @@ const Dashboard = ({ onBack }: DashboardProps) => {
   const [isSignOutModalOpen, setIsSignOutModalOpen] = useState(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [isTimeLoggingOpen, setIsTimeLoggingOpen] = useState(false);
-  const [showFeed, setShowFeed] = useState(false);
   const [timeLogForm, setTimeLogForm] = useState({
     mode: 'helped' as 'helped' | 'wasHelped',
     hours: 1,
@@ -233,56 +234,19 @@ const Dashboard = ({ onBack }: DashboardProps) => {
     }
   };
 
-  const handleFeedClick = () => {
-    setShowFeed(true);
-  };
-
   const timeOptions = [0.5, 1, 1.5, 2, 3, 4, 6, 8];
 
   return (
     <div className="min-h-screen w-full bg-amber-200">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         {/* Header */}
-        <header className="flex justify-between items-center mb-8">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={onBack}
-              className="text-2xl font-bold text-black italic hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
-            >
-              yard
-            </button>
-          </div>
-          <nav>
-            <ul className="flex gap-6 items-center">
-              <li>
-                <button 
-                  onClick={handleFeedClick}
-                  className="flex items-center gap-2 text-black hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
-                >
-                  <Home size={16} />
-                  <span className="hidden sm:inline">feed</span>
-                </button>
-              </li>
-              <li>
-                <button 
-                  className="flex items-center gap-2 text-black bg-white bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
-                >
-                  <BarChart3 size={16} />
-                  <span className="hidden sm:inline">dashboard</span>
-                </button>
-              </li>
-              <li>
-                <button
-                  onClick={() => setIsSignOutModalOpen(true)}
-                  className="flex items-center gap-2 text-black hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
-                >
-                  <LogOut size={16} />
-                  <span className="hidden sm:inline">sign out</span>
-                </button>
-              </li>
-            </ul>
-          </nav>
-        </header>
+        <AuthenticatedHeader
+          currentPage="dashboard"
+          onFeedClick={onFeedClick}
+          onDashboardClick={() => {}} // Already on dashboard
+          onSignOut={() => setIsSignOutModalOpen(true)}
+          onHomeClick={onBack}
+        />
 
         {/* Welcome Section */}
         <div className="bg-white rounded-3xl p-8 shadow-lg mb-8 border border-amber-100">
@@ -379,11 +343,6 @@ const Dashboard = ({ onBack }: DashboardProps) => {
                       placeholder="Email or phone"
                       className="w-full pl-10 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200 text-sm"
                     />
-                    {isValidEmail(timeLogForm.contact) ? (
-                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                    ) : (
-                      <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                    )}
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
                     {isValidEmail(timeLogForm.contact) 
