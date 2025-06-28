@@ -163,22 +163,45 @@ function App() {
     try {
       console.log('Handling auth success for user:', user.id);
       
-      // Check if profile exists
+      // First, check localStorage for existing profile
+      const storedProfile = localStorage.getItem('userProfile');
+      if (storedProfile) {
+        try {
+          const profile = JSON.parse(storedProfile);
+          if (profile.user_id === user.id) {
+            console.log('Using cached profile from localStorage');
+            setUserProfile(profile);
+            setIsAuthenticated(true);
+            
+            // Check for pending time log data
+            const pendingTimeLogData = localStorage.getItem('pendingTimeLog');
+            if (pendingTimeLogData) {
+              try {
+                const timeLogData = JSON.parse(pendingTimeLogData);
+                setPendingTimeLog(timeLogData);
+              } catch (e) {
+                console.error('Error parsing pending time log data:', e);
+                localStorage.removeItem('pendingTimeLog');
+              }
+            }
+            return; // Exit early with cached data
+          }
+        } catch (e) {
+          console.error('Error parsing stored profile:', e);
+          localStorage.removeItem('userProfile');
+        }
+      }
+
+      // If no cached profile, fetch from database
       const { data: existingProfile, error: profileError } = await supabase
         .from('profiles')
         .select('*')
         .eq('user_id', user.id)
         .single();
 
-      if (profileError && profileError.code !== 'PGRST116') {
-        console.error('Profile fetch error:', profileError);
-        // Don't throw - continue with basic auth
-        console.log('Continuing with basic auth despite profile error');
-      }
-
       let profile = existingProfile;
 
-      if (!existingProfile) {
+      if (!existingProfile && profileError?.code === 'PGRST116') {
         console.log('No existing profile found, creating new one');
         try {
           profile = await createProfileFromPendingData(user);
@@ -194,22 +217,22 @@ function App() {
             time_balance_hours: 0
           };
         }
+      } else if (profileError) {
+        console.error('Profile fetch error:', profileError);
+        // Create basic profile as fallback
+        profile = {
+          id: user.id,
+          user_id: user.id,
+          email: user.email,
+          full_name: user.user_metadata?.full_name || '',
+          display_name: user.user_metadata?.full_name?.split(' ')[0] || 'User',
+          time_balance_hours: 0
+        };
       } else {
         console.log('Using existing profile:', existingProfile.id);
-        
-        // Check for pending time log data even if profile exists
-        const pendingTimeLogData = localStorage.getItem('pendingTimeLog');
-        if (pendingTimeLogData) {
-          try {
-            const timeLogData = JSON.parse(pendingTimeLogData);
-            setPendingTimeLog(timeLogData);
-          } catch (e) {
-            console.error('Error parsing pending time log data:', e);
-            localStorage.removeItem('pendingTimeLog');
-          }
-        }
       }
 
+      // Cache the profile and set state
       localStorage.setItem('userProfile', JSON.stringify(profile));
       setUserProfile(profile);
       setIsAuthenticated(true);
@@ -229,8 +252,18 @@ function App() {
       console.log('Auth success completed successfully');
     } catch (error: any) {
       console.error('Error in handleAuthSuccess:', error);
-      // Don't prevent sign-in for profile errors
-      console.log('Auth success had errors but continuing...');
+      // Don't prevent sign-in for profile errors - create minimal profile
+      const basicProfile = {
+        id: user.id,
+        user_id: user.id,
+        email: user.email,
+        full_name: user.user_metadata?.full_name || '',
+        display_name: user.user_metadata?.full_name?.split(' ')[0] || 'User',
+        time_balance_hours: 0
+      };
+      localStorage.setItem('userProfile', JSON.stringify(basicProfile));
+      setUserProfile(basicProfile);
+      setIsAuthenticated(true);
     }
   };
 
@@ -244,22 +277,13 @@ function App() {
     setUserProfile(null);
   };
 
-  // Initialize auth state with timeout protection
+  // Initialize auth state
   useEffect(() => {
     let mounted = true;
-    let timeoutId: NodeJS.Timeout;
 
     const initAuth = async () => {
-      console.log('Starting auth initialization...');
-      
       try {
-        // Set a timeout to prevent infinite loading
-        timeoutId = setTimeout(() => {
-          if (mounted) {
-            console.log('Auth initialization timeout - proceeding without auth');
-            setIsInitializing(false);
-          }
-        }, 5000); // 5 second timeout
+        console.log('Starting auth initialization...');
 
         // Get current session
         const { data: { session }, error } = await supabase.auth.getSession();
@@ -289,9 +313,8 @@ function App() {
           clearAuthState();
         }
       } finally {
-        console.log('Auth initialization complete, setting isInitializing to false');
+        console.log('Auth initialization complete');
         if (mounted) {
-          clearTimeout(timeoutId);
           setIsInitializing(false);
         }
       }
@@ -314,7 +337,6 @@ function App() {
 
     return () => {
       mounted = false;
-      clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
   }, []);
