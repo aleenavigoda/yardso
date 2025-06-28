@@ -244,13 +244,23 @@ function App() {
     setUserProfile(null);
   };
 
-  // Simplified auth initialization - this is the key fix
+  // Simplified and more robust auth initialization
   useEffect(() => {
     let mounted = true;
+    let timeoutId: NodeJS.Timeout;
 
     const initAuth = async () => {
       try {
         console.log('Initializing authentication...');
+
+        // Set a timeout to prevent infinite loading
+        timeoutId = setTimeout(() => {
+          if (mounted) {
+            console.log('Auth initialization timeout, clearing state');
+            clearAuthState();
+            setIsInitializing(false);
+          }
+        }, 10000); // 10 second timeout
 
         // Check for existing session first
         const { data: { session }, error } = await supabase.auth.getSession();
@@ -322,6 +332,9 @@ function App() {
           clearAuthState();
         }
       } finally {
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+        }
         if (mounted) {
           setIsInitializing(false);
         }
@@ -340,11 +353,23 @@ function App() {
         await handleAuthSuccess(session.user);
       } else if (event === 'SIGNED_OUT') {
         clearAuthState();
+      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+        // Handle token refresh without full re-initialization
+        console.log('Token refreshed for user:', session.user.id);
+        if (userProfile && userProfile.user_id === session.user.id) {
+          // Keep existing state if user hasn't changed
+          console.log('Token refreshed, keeping existing state');
+        } else {
+          await handleAuthSuccess(session.user);
+        }
       }
     });
 
     return () => {
       mounted = false;
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
       subscription.unsubscribe();
     };
   }, []); // Empty dependency array is crucial
@@ -454,13 +479,14 @@ function App() {
     }
   };
 
-  // Show loading screen during initialization
+  // Show loading screen during initialization with timeout protection
   if (isInitializing) {
     return (
       <div className="min-h-screen w-full bg-amber-200 flex items-center justify-center">
         <div className="text-center">
           <div className="text-2xl font-bold text-black italic mb-4">yard</div>
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto"></div>
+          <p className="text-sm text-gray-600 mt-4">Loading your workyard...</p>
         </div>
       </div>
     );

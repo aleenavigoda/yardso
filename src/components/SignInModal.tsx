@@ -16,6 +16,25 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
+  // Add timeout protection for sign-in
+  useEffect(() => {
+    let timeoutId: NodeJS.Timeout;
+    
+    if (isLoading) {
+      // Set a 30-second timeout for sign-in
+      timeoutId = setTimeout(() => {
+        setIsLoading(false);
+        setError('Sign in timed out. Please try again.');
+      }, 30000);
+    }
+
+    return () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+      }
+    };
+  }, [isLoading]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);

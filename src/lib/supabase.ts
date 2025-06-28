@@ -10,6 +10,16 @@ if (!supabaseUrl || !supabaseAnonKey) {
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     // Override the redirect URL for development
-    redirectTo: window.location.origin
+    redirectTo: window.location.origin,
+    // Add retry configuration
+    autoRefreshToken: true,
+    persistSession: true,
+    detectSessionInUrl: true
+  },
+  // Add global configuration for better error handling
+  global: {
+    headers: {
+      'x-client-info': 'yard-app'
+    }
   }
 })
