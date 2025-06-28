@@ -65,32 +65,26 @@ const HeaderSignUpModal = ({ isOpen, onClose, onSignUpSuccess }: HeaderSignUpMod
 
       console.log('Prepared URLs:', urlsData);
 
-      // First, store pending profile data
-      const pendingProfileData = {
-        email: formData.email.toLowerCase().trim(),
-        full_name: formData.fullName.trim(),
-        display_name: formData.fullName.trim().split(' ')[0],
-        urls: urlsData
-      };
-
-      console.log('Inserting pending profile:', pendingProfileData);
-
-      // Insert into pending_profiles table using RPC function
+      // Store pending profile data using direct insert
+      console.log('Inserting pending profile...');
+      
       const { data: pendingProfile, error: pendingError } = await supabase
-        .rpc('insert_pending_profile', {
-          p_email: pendingProfileData.email,
-          p_full_name: pendingProfileData.full_name,
-          p_display_name: pendingProfileData.display_name,
-          p_urls: JSON.stringify(urlsData),
-          p_time_logging_data: null
-        });
+        .from('pending_profiles')
+        .insert({
+          email: formData.email.toLowerCase().trim(),
+          full_name: formData.fullName.trim(),
+          display_name: formData.fullName.trim().split(' ')[0],
+          urls: urlsData
+        })
+        .select()
+        .single();
 
       if (pendingError) {
         console.error('Pending profile error:', pendingError);
         throw new Error(`Failed to save profile data: ${pendingError.message}`);
       }
 
-      console.log('Pending profile created successfully');
+      console.log('Pending profile created successfully:', pendingProfile.id);
 
       // Now sign up with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
