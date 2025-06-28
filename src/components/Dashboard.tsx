@@ -136,11 +136,18 @@ const Dashboard = ({ onBack }: DashboardProps) => {
   };
 
   const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    localStorage.removeItem('userProfile');
-    localStorage.removeItem('pendingTimeLog');
-    setIsSignOutModalOpen(false);
-    onBack();
+    try {
+      await supabase.auth.signOut();
+      localStorage.removeItem('userProfile');
+      localStorage.removeItem('pendingTimeLog');
+      setIsSignOutModalOpen(false);
+      onBack();
+    } catch (error) {
+      console.error('Error signing out:', error);
+      // Still close modal and redirect even if signOut fails
+      setIsSignOutModalOpen(false);
+      onBack();
+    }
   };
 
   const handleProfileUpdate = async () => {

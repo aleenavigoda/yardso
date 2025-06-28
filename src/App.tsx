@@ -86,6 +86,25 @@ function App() {
       if (existingProfile) {
         console.log('Profile already exists:', existingProfile.id);
         newProfile = existingProfile;
+        
+        // Update existing profile with pending data if available
+        if (pendingProfiles && pendingProfiles.length > 0) {
+          const pending = pendingProfiles[0];
+          const { data: updatedProfile, error: updateError } = await supabase
+            .from('profiles')
+            .update({
+              full_name: pending.full_name || existingProfile.full_name,
+              display_name: pending.display_name || existingProfile.display_name,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', existingProfile.id)
+            .select()
+            .single();
+
+          if (updatedProfile && !updateError) {
+            newProfile = updatedProfile;
+          }
+        }
       } else {
         // Create the profile
         const { data: createdProfile, error: profileError } = await supabase
@@ -192,6 +211,18 @@ function App() {
       localStorage.setItem('userProfile', JSON.stringify(profile));
       setUserProfile(profile);
       setIsAuthenticated(true);
+      
+      // Check for pending time log data
+      const pendingTimeLogData = localStorage.getItem('pendingTimeLog');
+      if (pendingTimeLogData) {
+        try {
+          const timeLogData = JSON.parse(pendingTimeLogData);
+          setPendingTimeLog(timeLogData);
+        } catch (e) {
+          console.error('Error parsing pending time log data:', e);
+          localStorage.removeItem('pendingTimeLog');
+        }
+      }
       
       console.log('Auth success completed successfully');
     } catch (error: any) {
