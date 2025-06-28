@@ -277,7 +277,7 @@ function App() {
     setUserProfile(null);
   };
 
-  // Fixed auth initialization - no more hanging finally blocks
+  // Fixed auth initialization with JWT session error handling
   useEffect(() => {
     let isMounted = true;
     
@@ -299,13 +299,31 @@ function App() {
       }
     );
 
-    // Simple initialization - call setIsInitializing(false) immediately after each path
     const initAuth = () => {
       console.log('Starting auth initialization...');
       
       supabase.auth.getSession()
         .then(({ data: { session }, error }) => {
           if (!isMounted) return;
+          
+          // Handle the specific JWT session error
+          if (error && error.message?.includes('Session from session_id claim in JWT does not exist')) {
+            console.log('Invalid JWT session detected, clearing auth state');
+            // Clear the invalid session and let user sign in fresh
+            supabase.auth.signOut().catch(console.error);
+            clearAuthState();
+            console.log('Auth initialization complete (cleared invalid session)');
+            setIsInitializing(false);
+            return;
+          }
+          
+          if (error) {
+            console.error('Auth session error:', error);
+            clearAuthState();
+            console.log('Auth initialization complete (error case)');
+            setIsInitializing(false);
+            return;
+          }
           
           if (session?.user) {
             console.log('Initial session found for user:', session.user.id);
@@ -316,7 +334,6 @@ function App() {
             clearAuthState();
           }
           
-          // Complete initialization here
           console.log('Auth initialization complete');
           setIsInitializing(false);
         })
@@ -324,8 +341,7 @@ function App() {
           console.error('Auth initialization error:', error);
           if (isMounted) {
             clearAuthState();
-            // Complete initialization here too
-            console.log('Auth initialization complete (error case)');
+            console.log('Auth initialization complete (catch case)');
             setIsInitializing(false);
           }
         });
