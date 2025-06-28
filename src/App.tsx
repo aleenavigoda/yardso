@@ -244,36 +244,29 @@ function App() {
     setUserProfile(null);
   };
 
-  // Simplified auth initialization
+  // Simplified auth initialization - this is the key fix
   useEffect(() => {
+    let mounted = true;
+
     const initAuth = async () => {
       try {
         console.log('Initializing authentication...');
 
-        // Check for email confirmation tokens in URL hash
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
-        const accessToken = hashParams.get('access_token');
-        const refreshToken = hashParams.get('refresh_token');
+        // Check for existing session first
+        const { data: { session }, error } = await supabase.auth.getSession();
         
-        if (accessToken && refreshToken) {
-          console.log('Found auth tokens in URL, setting session...');
-          const { data, error } = await supabase.auth.setSession({
-            access_token: accessToken,
-            refresh_token: refreshToken
-          });
-          
-          if (!error && data.user) {
-            await handleAuthSuccess(data.user);
+        if (error) {
+          console.error('Error getting session:', error);
+          if (mounted) {
+            clearAuthState();
+            setIsInitializing(false);
           }
-          
-          window.history.replaceState({}, document.title, window.location.pathname);
           return;
         }
 
-        // Check for existing session
-        const { data: { session } } = await supabase.auth.getSession();
-        
         if (session && session.user) {
+          console.log('Found existing session for user:', session.user.id);
+          
           // Check if we have profile in localStorage first
           const storedProfile = localStorage.getItem('userProfile');
           if (storedProfile) {
@@ -281,61 +274,80 @@ function App() {
               const profile = JSON.parse(storedProfile);
               // Verify the stored profile matches the current user
               if (profile.user_id === session.user.id) {
-                setUserProfile(profile);
-                setIsAuthenticated(true);
-                console.log('Loaded profile from localStorage');
-                
-                // Check for pending time log data
-                const pendingTimeLogData = localStorage.getItem('pendingTimeLog');
-                if (pendingTimeLogData) {
-                  try {
-                    const timeLogData = JSON.parse(pendingTimeLogData);
-                    setPendingTimeLog(timeLogData);
-                  } catch (e) {
-                    console.error('Error parsing pending time log data:', e);
-                    localStorage.removeItem('pendingTimeLog');
+                if (mounted) {
+                  setUserProfile(profile);
+                  setIsAuthenticated(true);
+                  console.log('Loaded profile from localStorage');
+                  
+                  // Check for pending time log data
+                  const pendingTimeLogData = localStorage.getItem('pendingTimeLog');
+                  if (pendingTimeLogData) {
+                    try {
+                      const timeLogData = JSON.parse(pendingTimeLogData);
+                      setPendingTimeLog(timeLogData);
+                    } catch (e) {
+                      console.error('Error parsing pending time log data:', e);
+                      localStorage.removeItem('pendingTimeLog');
+                    }
                   }
                 }
               } else {
                 console.log('Stored profile user_id mismatch, refreshing...');
                 localStorage.removeItem('userProfile');
-                await handleAuthSuccess(session.user);
+                if (mounted) {
+                  await handleAuthSuccess(session.user);
+                }
               }
             } catch (e) {
               console.error('Error parsing stored profile:', e);
               localStorage.removeItem('userProfile');
-              await handleAuthSuccess(session.user);
+              if (mounted) {
+                await handleAuthSuccess(session.user);
+              }
             }
           } else {
-            await handleAuthSuccess(session.user);
+            if (mounted) {
+              await handleAuthSuccess(session.user);
+            }
           }
         } else {
           console.log('No active session found');
-          clearAuthState();
+          if (mounted) {
+            clearAuthState();
+          }
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
-        clearAuthState();
+        if (mounted) {
+          clearAuthState();
+        }
       } finally {
-        setIsInitializing(false);
+        if (mounted) {
+          setIsInitializing(false);
+        }
       }
     };
 
     initAuth();
 
-    // Listen for auth state changes
+    // Listen for auth state changes - simplified
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+      
       console.log('Auth state changed:', event);
       
-      if (event === 'SIGNED_IN' && session) {
+      if (event === 'SIGNED_IN' && session?.user) {
         await handleAuthSuccess(session.user);
       } else if (event === 'SIGNED_OUT') {
         clearAuthState();
       }
     });
 
-    return () => subscription.unsubscribe();
-  }, []);
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, []); // Empty dependency array is crucial
 
   const handleTimeLoggingSignUp = (timeLoggingData: TimeLoggingData) => {
     setPendingTimeLog(timeLoggingData);
