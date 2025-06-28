@@ -13,6 +13,16 @@ import BrowseNetwork from './components/BrowseNetwork';
 import { supabase } from './lib/supabase';
 import type { TimeLoggingData } from './types';
 
+interface SearchParams {
+  query: string;
+  serviceType: string;
+  deliverableFormat: string;
+  timeline: string;
+  industry: string;
+  timeEstimate: string;
+  companyStage: string;
+}
+
 function App() {
   const [searchValue, setSearchValue] = useState('');
   const [isTimeLoggingOpen, setIsTimeLoggingOpen] = useState(false);
@@ -20,6 +30,7 @@ function App() {
   const [showDashboard, setShowDashboard] = useState(false);
   const [showFeed, setShowFeed] = useState(false);
   const [showBrowseNetwork, setShowBrowseNetwork] = useState(false);
+  const [browseNetworkParams, setBrowseNetworkParams] = useState<SearchParams | undefined>();
   const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | undefined>();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -284,6 +295,7 @@ function App() {
     setShowDashboard(false);
     setShowFeed(false);
     setShowBrowseNetwork(false);
+    setBrowseNetworkParams(undefined);
     setPendingTimeLog(undefined);
     setIsAuthenticated(false);
     setUserProfile(null);
@@ -447,6 +459,7 @@ function App() {
     setShowDashboard(false);
     setShowFeed(false);
     setShowBrowseNetwork(false);
+    setBrowseNetworkParams(undefined);
   };
 
   const handleHeaderSignUpSuccess = () => {
@@ -461,15 +474,25 @@ function App() {
     setShowDashboard(true);
     setShowFeed(false);
     setShowBrowseNetwork(false);
+    setBrowseNetworkParams(undefined);
   };
 
   const handleFeedClick = () => {
     setShowFeed(true);
     setShowDashboard(false);
     setShowBrowseNetwork(false);
+    setBrowseNetworkParams(undefined);
   };
 
   const handleBrowseNetworkClick = () => {
+    setShowBrowseNetwork(true);
+    setShowDashboard(false);
+    setShowFeed(false);
+    setBrowseNetworkParams(undefined);
+  };
+
+  const handleSubmitRequest = (searchParams: SearchParams) => {
+    setBrowseNetworkParams(searchParams);
     setShowBrowseNetwork(true);
     setShowDashboard(false);
     setShowFeed(false);
@@ -499,14 +522,15 @@ function App() {
     );
   }
 
-  // Show browse network if user is authenticated and wants to see it
-  if (showBrowseNetwork && isAuthenticated) {
+  // Show browse network if user wants to see it
+  if (showBrowseNetwork) {
     return (
       <BrowseNetwork 
         onBack={handleBackToHome}
         onFeedClick={handleFeedClick}
         onDashboardClick={handleDashboardClick}
         onSignOut={handleSignOut}
+        searchParams={browseNetworkParams}
       />
     );
   }
@@ -557,6 +581,7 @@ function App() {
           <SearchForm
             searchValue={searchValue}
             setSearchValue={setSearchValue}
+            onSubmitRequest={handleSubmitRequest}
           />
           <ExampleQueries setSearchValue={setSearchValue} />
         </main>

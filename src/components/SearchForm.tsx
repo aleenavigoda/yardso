@@ -4,14 +4,40 @@ import { Search, ChevronDown, Sparkles } from 'lucide-react';
 interface SearchFormProps {
   searchValue: string;
   setSearchValue: (value: string) => void;
+  onSubmitRequest?: (searchParams: {
+    query: string;
+    serviceType: string;
+    deliverableFormat: string;
+    timeline: string;
+    industry: string;
+    timeEstimate: string;
+    companyStage: string;
+  }) => void;
 }
 
-const SearchForm = ({ searchValue, setSearchValue }: SearchFormProps) => {
+const SearchForm = ({ searchValue, setSearchValue, onSubmitRequest }: SearchFormProps) => {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [formData, setFormData] = useState({
+    serviceType: 'Design Critique',
+    deliverableFormat: 'Live Consultation',
+    timeline: 'Immediate',
+    industry: 'Technology',
+    timeEstimate: '1-2 hours',
+    companyStage: 'Pre-seed'
+  });
 
   const handleGetConnected = () => {
     if (searchValue.trim()) {
       setIsExpanded(true);
+    }
+  };
+
+  const handleSubmitRequest = () => {
+    if (onSubmitRequest) {
+      onSubmitRequest({
+        query: searchValue,
+        ...formData
+      });
     }
   };
 
@@ -42,20 +68,30 @@ const SearchForm = ({ searchValue, setSearchValue }: SearchFormProps) => {
               <label className="block text-sm font-semibold text-gray-700 mb-3">
                 Service Type
               </label>
-              <select className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200">
+              <select 
+                value={formData.serviceType}
+                onChange={(e) => setFormData({ ...formData, serviceType: e.target.value })}
+                className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200"
+              >
                 <option>Design Critique</option>
                 <option>Code Review</option>
                 <option>Strategy Consultation</option>
                 <option>Mentorship</option>
                 <option>Legal Review</option>
                 <option>Financial Analysis</option>
+                <option>Technical Consultation</option>
+                <option>Marketing Strategy</option>
               </select>
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-3">
                 Deliverable Format
               </label>
-              <select className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200">
+              <select 
+                value={formData.deliverableFormat}
+                onChange={(e) => setFormData({ ...formData, deliverableFormat: e.target.value })}
+                className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200"
+              >
                 <option>Live Consultation</option>
                 <option>Written Feedback</option>
                 <option>Video Call</option>
@@ -68,7 +104,11 @@ const SearchForm = ({ searchValue, setSearchValue }: SearchFormProps) => {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-3">Timeline</label>
-              <select className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200">
+              <select 
+                value={formData.timeline}
+                onChange={(e) => setFormData({ ...formData, timeline: e.target.value })}
+                className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200"
+              >
                 <option>Immediate</option>
                 <option>Within 48 hours</option>
                 <option>This week</option>
@@ -78,7 +118,11 @@ const SearchForm = ({ searchValue, setSearchValue }: SearchFormProps) => {
             </div>
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-3">Industry</label>
-              <select className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200">
+              <select 
+                value={formData.industry}
+                onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
+                className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200"
+              >
                 <option>Technology</option>
                 <option>Healthcare</option>
                 <option>Finance</option>
@@ -94,7 +138,11 @@ const SearchForm = ({ searchValue, setSearchValue }: SearchFormProps) => {
               <label className="block text-sm font-semibold text-gray-700 mb-3">
                 Time Estimate
               </label>
-              <select className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200">
+              <select 
+                value={formData.timeEstimate}
+                onChange={(e) => setFormData({ ...formData, timeEstimate: e.target.value })}
+                className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200"
+              >
                 <option>1-2 hours</option>
                 <option>Half day</option>
                 <option>Full day</option>
@@ -106,7 +154,11 @@ const SearchForm = ({ searchValue, setSearchValue }: SearchFormProps) => {
               <label className="block text-sm font-semibold text-gray-700 mb-3">
                 Company Stage
               </label>
-              <select className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200">
+              <select 
+                value={formData.companyStage}
+                onChange={(e) => setFormData({ ...formData, companyStage: e.target.value })}
+                className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200"
+              >
                 <option>Pre-seed</option>
                 <option>Seed</option>
                 <option>Series A</option>
@@ -118,7 +170,10 @@ const SearchForm = ({ searchValue, setSearchValue }: SearchFormProps) => {
           </div>
           
           <div className="flex justify-end pt-4">
-            <button className="bg-black text-white px-8 py-3 rounded-full hover:bg-gray-800 transition-all duration-200 transform hover:scale-105 shadow-lg font-medium">
+            <button 
+              onClick={handleSubmitRequest}
+              className="bg-black text-white px-8 py-3 rounded-full hover:bg-gray-800 transition-all duration-200 transform hover:scale-105 shadow-lg font-medium"
+            >
               Submit Request
             </button>
           </div>

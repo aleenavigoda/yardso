@@ -18,6 +18,16 @@ interface NetworkUser {
   preferred_work_types?: string[];
 }
 
+interface SearchParams {
+  query?: string;
+  serviceType?: string;
+  deliverableFormat?: string;
+  timeline?: string;
+  industry?: string;
+  timeEstimate?: string;
+  companyStage?: string;
+}
+
 interface FilterState {
   availability: 'all' | 'available' | 'busy';
   location: string;
@@ -31,12 +41,13 @@ interface BrowseNetworkProps {
   onFeedClick: () => void;
   onDashboardClick: () => void;
   onSignOut: () => void;
+  searchParams?: SearchParams;
 }
 
-const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut }: BrowseNetworkProps) => {
+const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searchParams }: BrowseNetworkProps) => {
   const [users, setUsers] = useState<NetworkUser[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<NetworkUser[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(searchParams?.query || '');
   const [isLoading, setIsLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState<NetworkUser | null>(null);
@@ -50,7 +61,33 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut }: Bro
     timeBalance: 'all'
   });
 
-  // Available filter options
+  // Landing page search parameters
+  const serviceTypes = [
+    'Design Critique', 'Code Review', 'Strategy Consultation', 'Mentorship', 
+    'Legal Review', 'Financial Analysis', 'Technical Consultation', 'Marketing Strategy'
+  ];
+
+  const deliverableFormats = [
+    'Live Consultation', 'Written Feedback', 'Video Call', 'Documentation', 'Workshop Session'
+  ];
+
+  const timelines = [
+    'Immediate', 'Within 48 hours', 'This week', 'Next week', 'Flexible'
+  ];
+
+  const industries = [
+    'Technology', 'Healthcare', 'Finance', 'Education', 'Entertainment', 'Other'
+  ];
+
+  const timeEstimates = [
+    '1-2 hours', 'Half day', 'Full day', 'Multiple days', 'Ongoing project'
+  ];
+
+  const companyStages = [
+    'Pre-seed', 'Seed', 'Series A', 'Series B+', 'Public Company', 'Not applicable'
+  ];
+
+  // Available filter options for the filter panel
   const availableSkills = [
     'JavaScript', 'React', 'Node.js', 'Python', 'UI/UX Design', 
     'Product Strategy', 'Legal Review', 'Marketing Strategy', 'Data Analysis',
@@ -66,6 +103,29 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut }: Bro
     'San Francisco, CA', 'New York, NY', 'Los Angeles, CA', 'Austin, TX',
     'Seattle, WA', 'Chicago, IL', 'Boston, MA', 'Remote'
   ];
+
+  // Initialize filters based on search params
+  useEffect(() => {
+    if (searchParams) {
+      // Map service type to skills
+      const skillMapping: { [key: string]: string[] } = {
+        'Design Critique': ['UI/UX Design', 'Design Critique'],
+        'Code Review': ['JavaScript', 'React', 'Node.js', 'Python', 'Code Review'],
+        'Strategy Consultation': ['Product Strategy', 'Business Development'],
+        'Legal Review': ['Legal Review'],
+        'Financial Analysis': ['Data Analysis', 'Fundraising'],
+        'Technical Consultation': ['JavaScript', 'React', 'Node.js', 'Python'],
+        'Marketing Strategy': ['Marketing Strategy']
+      };
+
+      if (searchParams.serviceType && skillMapping[searchParams.serviceType]) {
+        setFilters(prev => ({
+          ...prev,
+          skills: skillMapping[searchParams.serviceType] || []
+        }));
+      }
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     loadUsers();
@@ -289,8 +349,55 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut }: Bro
         {/* Page Title */}
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-black mb-2">Browse Network</h1>
-          <p className="text-gray-700">Discover professionals in your network</p>
+          <p className="text-gray-700">
+            {searchParams ? 'Professionals matching your request' : 'Discover professionals in your network'}
+          </p>
         </div>
+
+        {/* Search Parameters Summary (if coming from landing page) */}
+        {searchParams && (
+          <div className="bg-white rounded-3xl p-6 shadow-lg border border-amber-100 mb-6">
+            <h3 className="font-semibold text-gray-900 mb-4">Your Request</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
+              {searchParams.serviceType && (
+                <div>
+                  <span className="text-gray-500">Service Type:</span>
+                  <span className="ml-2 font-medium">{searchParams.serviceType}</span>
+                </div>
+              )}
+              {searchParams.deliverableFormat && (
+                <div>
+                  <span className="text-gray-500">Format:</span>
+                  <span className="ml-2 font-medium">{searchParams.deliverableFormat}</span>
+                </div>
+              )}
+              {searchParams.timeline && (
+                <div>
+                  <span className="text-gray-500">Timeline:</span>
+                  <span className="ml-2 font-medium">{searchParams.timeline}</span>
+                </div>
+              )}
+              {searchParams.industry && (
+                <div>
+                  <span className="text-gray-500">Industry:</span>
+                  <span className="ml-2 font-medium">{searchParams.industry}</span>
+                </div>
+              )}
+              {searchParams.timeEstimate && (
+                <div>
+                  <span className="text-gray-500">Time Estimate:</span>
+                  <span className="ml-2 font-medium">{searchParams.timeEstimate}</span>
+                </div>
+              )}
+              {searchParams.companyStage && (
+                <div>
+                  <span className="text-gray-500">Company Stage:</span>
+                  <span className="ml-2 font-medium">{searchParams.companyStage}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Search and Filters */}
         <div className="bg-white rounded-3xl p-6 shadow-lg border border-amber-100 mb-8">
@@ -397,7 +504,7 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut }: Bro
               {/* Time Balance Filter */}
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-3">Time Balance</label>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   {[
                     { value: 'all', label: 'All' },
                     { value: 'positive', label: 'Owed Time (+)' },
