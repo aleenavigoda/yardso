@@ -43,6 +43,7 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
         } else {
           setError(authError.message || 'Sign in failed. Please try again.');
         }
+        setIsLoading(false);
         return;
       }
 
@@ -52,18 +53,19 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
         // Reset form
         setFormData({ email: '', password: '' });
         setError('');
+        setIsLoading(false);
         
-        // Close modal and trigger success callback
+        // Close modal and trigger success callback immediately
         console.log('Sign in successful, closing modal');
         onClose();
         onSignInSuccess();
       } else {
         setError('Sign in failed. Please try again.');
+        setIsLoading(false);
       }
     } catch (err: any) {
       console.error('Sign in error:', err);
       setError('An unexpected error occurred. Please try again.');
-    } finally {
       setIsLoading(false);
     }
   };
@@ -79,7 +81,6 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
   // Reset state when modal opens/closes
   useEffect(() => {
     if (isOpen) {
-      setIsLoading(false);
       setError('');
     } else {
       // Reset loading state when modal closes
@@ -88,6 +89,29 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
       setError('');
     }
   }, [isOpen]);
+
+  // Listen for auth state changes to handle successful sign-in
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (event === 'SIGNED_IN' && session?.user && isLoading) {
+        console.log('Auth state change detected: SIGNED_IN');
+        
+        // Reset form and close modal
+        setFormData({ email: '', password: '' });
+        setError('');
+        setIsLoading(false);
+        
+        onClose();
+        onSignInSuccess();
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [isOpen, isLoading, onClose, onSignInSuccess]);
 
   if (!isOpen) return null;
 
