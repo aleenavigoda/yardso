@@ -277,43 +277,11 @@ function App() {
     setUserProfile(null);
   };
 
-  // Initialize auth state with bulletproof error handling
+  // Fixed auth initialization - no more hanging finally blocks
   useEffect(() => {
     let isMounted = true;
     
-    const initAuth = async () => {
-      console.log('Starting auth initialization...');
-      
-      try {
-        // Get initial session
-        const { data: { session }, error } = await supabase.auth.getSession();
-        
-        if (!isMounted) return;
-        
-        if (session?.user) {
-          console.log('Initial session found for user:', session.user.id);
-          // Fire and forget - don't await
-          handleAuthSuccess(session.user).catch(error => {
-            console.error('Initial auth success handler failed:', error);
-          });
-        } else {
-          clearAuthState();
-        }
-      } catch (error) {
-        console.error('Auth initialization error:', error);
-        if (isMounted) {
-          clearAuthState();
-        }
-      } finally {
-        // ALWAYS complete initialization
-        if (isMounted) {
-          console.log('Auth initialization complete');
-          setIsInitializing(false);
-        }
-      }
-    };
-
-    // Set up auth state listener BEFORE initializing
+    // Set up auth state listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event);
@@ -322,7 +290,6 @@ function App() {
         
         if (event === 'SIGNED_IN' && session?.user) {
           console.log('Handling auth success for user:', session.user.id);
-          // Fire and forget - don't let this block anything
           handleAuthSuccess(session.user).catch(error => {
             console.error('Auth state change handler failed:', error);
           });
@@ -332,10 +299,41 @@ function App() {
       }
     );
 
-    // Initialize auth
+    // Simple initialization - call setIsInitializing(false) immediately after each path
+    const initAuth = () => {
+      console.log('Starting auth initialization...');
+      
+      supabase.auth.getSession()
+        .then(({ data: { session }, error }) => {
+          if (!isMounted) return;
+          
+          if (session?.user) {
+            console.log('Initial session found for user:', session.user.id);
+            handleAuthSuccess(session.user).catch(error => {
+              console.error('Initial auth success handler failed:', error);
+            });
+          } else {
+            clearAuthState();
+          }
+          
+          // Complete initialization here
+          console.log('Auth initialization complete');
+          setIsInitializing(false);
+        })
+        .catch(error => {
+          console.error('Auth initialization error:', error);
+          if (isMounted) {
+            clearAuthState();
+            // Complete initialization here too
+            console.log('Auth initialization complete (error case)');
+            setIsInitializing(false);
+          }
+        });
+    };
+
+    // Start initialization
     initAuth();
 
-    // Cleanup
     return () => {
       isMounted = false;
       subscription.unsubscribe();
@@ -447,9 +445,8 @@ function App() {
     }
   };
 
-  // Show loading screen ONLY during initialization
+  // Show loading screen during initialization
   if (isInitializing) {
-    console.log('Showing loading screen because isInitializing is true');
     return (
       <div className="min-h-screen w-full bg-amber-200 flex items-center justify-center">
         <div className="text-center">
@@ -459,8 +456,6 @@ function App() {
       </div>
     );
   }
-
-  console.log('Not showing loading screen. isAuthenticated:', isAuthenticated, 'showDashboard:', showDashboard, 'showFeed:', showFeed);
 
   // Show feed if user is authenticated and wants to see it
   if (showFeed && isAuthenticated) {
