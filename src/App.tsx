@@ -244,7 +244,7 @@ function App() {
     setUserProfile(null);
   };
 
-  // Simplified auth initialization
+  // Simple auth initialization
   useEffect(() => {
     let mounted = true;
 
@@ -252,7 +252,7 @@ function App() {
       try {
         console.log('Initializing authentication...');
 
-        // Check for existing session first
+        // Check for existing session
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) {
@@ -347,7 +347,7 @@ function App() {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, []); // Empty dependency array is crucial
+  }, []);
 
   const handleTimeLoggingSignUp = (timeLoggingData: TimeLoggingData) => {
     setPendingTimeLog(timeLoggingData);
