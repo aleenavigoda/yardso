@@ -75,6 +75,7 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
 
       if (existingProfile) {
         // User exists - create direct time transaction
+        // The notification will be created automatically by the database trigger
         const { error: transactionError } = await supabase
           .from('time_transactions')
           .insert({
@@ -88,19 +89,6 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
           });
 
         if (transactionError) throw transactionError;
-
-        // Create notification for the other user
-        const { error: notificationError } = await supabase
-          .from('transaction_notifications')
-          .insert({
-            transaction_id: null, // Will be updated by trigger
-            recipient_id: existingProfile.id,
-            notification_type: 'time_logged',
-            title: 'Time logged for your review',
-            message: `${profile.full_name} logged ${hours} hour${hours !== 1 ? 's' : ''} of ${mode === 'helped' ? 'helping you' : 'time you spent helping them'}${description ? `: "${description}"` : ''}`
-          });
-
-        if (notificationError) console.warn('Failed to create notification:', notificationError);
 
         setSuccessMessage(`Time logged successfully! ${existingProfile.full_name} will be notified to confirm.`);
       } else {
