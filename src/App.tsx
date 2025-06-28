@@ -244,14 +244,14 @@ function App() {
     setUserProfile(null);
   };
 
-  // Simple auth initialization
+  // Initialize auth state
   useEffect(() => {
     let mounted = true;
 
     const initAuth = async () => {
+      console.log('Starting auth initialization...');
+      
       try {
-        console.log('Checking for existing session...');
-
         // Get current session
         const { data: { session }, error } = await supabase.auth.getSession();
         
@@ -264,11 +264,15 @@ function App() {
         }
 
         if (session?.user) {
-          console.log('Found existing session');
-          await handleAuthSuccess(session.user);
+          console.log('Found existing session for user:', session.user.id);
+          if (mounted) {
+            await handleAuthSuccess(session.user);
+          }
         } else {
           console.log('No existing session');
-          clearAuthState();
+          if (mounted) {
+            clearAuthState();
+          }
         }
       } catch (error) {
         console.error('Auth initialization error:', error);
@@ -276,7 +280,7 @@ function App() {
           clearAuthState();
         }
       } finally {
-        // ALWAYS set initializing to false
+        console.log('Auth initialization complete, setting isInitializing to false');
         if (mounted) {
           setIsInitializing(false);
         }
@@ -411,6 +415,7 @@ function App() {
 
   // Show loading screen ONLY during initialization
   if (isInitializing) {
+    console.log('Showing loading screen because isInitializing is true');
     return (
       <div className="min-h-screen w-full bg-amber-200 flex items-center justify-center">
         <div className="text-center">
@@ -420,6 +425,8 @@ function App() {
       </div>
     );
   }
+
+  console.log('Not showing loading screen. isAuthenticated:', isAuthenticated, 'showDashboard:', showDashboard, 'showFeed:', showFeed);
 
   // Show feed if user is authenticated and wants to see it
   if (showFeed && isAuthenticated) {
