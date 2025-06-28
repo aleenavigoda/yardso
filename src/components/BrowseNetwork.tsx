@@ -29,11 +29,12 @@ interface SearchParams {
 }
 
 interface FilterState {
-  availability: 'all' | 'available' | 'busy';
-  location: string;
-  skills: string[];
-  workTypes: string[];
-  timeBalance: 'all' | 'positive' | 'negative' | 'balanced';
+  serviceType: string;
+  deliverableFormat: string;
+  timeline: string;
+  industry: string;
+  timeEstimate: string;
+  companyStage: string;
 }
 
 interface BrowseNetworkProps {
@@ -54,14 +55,15 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   
   const [filters, setFilters] = useState<FilterState>({
-    availability: 'all',
-    location: '',
-    skills: [],
-    workTypes: [],
-    timeBalance: 'all'
+    serviceType: searchParams?.serviceType || '',
+    deliverableFormat: searchParams?.deliverableFormat || '',
+    timeline: searchParams?.timeline || '',
+    industry: searchParams?.industry || '',
+    timeEstimate: searchParams?.timeEstimate || '',
+    companyStage: searchParams?.companyStage || ''
   });
 
-  // Landing page search parameters
+  // Landing page search parameters - exact same as SearchForm
   const serviceTypes = [
     'Design Critique', 'Code Review', 'Strategy Consultation', 'Mentorship', 
     'Legal Review', 'Financial Analysis', 'Technical Consultation', 'Marketing Strategy'
@@ -86,46 +88,6 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
   const companyStages = [
     'Pre-seed', 'Seed', 'Series A', 'Series B+', 'Public Company', 'Not applicable'
   ];
-
-  // Available filter options for the filter panel
-  const availableSkills = [
-    'JavaScript', 'React', 'Node.js', 'Python', 'UI/UX Design', 
-    'Product Strategy', 'Legal Review', 'Marketing Strategy', 'Data Analysis',
-    'Fundraising', 'Code Review', 'Design Critique', 'Business Development'
-  ];
-
-  const availableWorkTypes = [
-    'consulting', 'mentoring', 'code_review', 'design_critique', 
-    'strategy_session', 'legal_review', 'technical_consultation'
-  ];
-
-  const availableLocations = [
-    'San Francisco, CA', 'New York, NY', 'Los Angeles, CA', 'Austin, TX',
-    'Seattle, WA', 'Chicago, IL', 'Boston, MA', 'Remote'
-  ];
-
-  // Initialize filters based on search params
-  useEffect(() => {
-    if (searchParams) {
-      // Map service type to skills
-      const skillMapping: { [key: string]: string[] } = {
-        'Design Critique': ['UI/UX Design', 'Design Critique'],
-        'Code Review': ['JavaScript', 'React', 'Node.js', 'Python', 'Code Review'],
-        'Strategy Consultation': ['Product Strategy', 'Business Development'],
-        'Legal Review': ['Legal Review'],
-        'Financial Analysis': ['Data Analysis', 'Fundraising'],
-        'Technical Consultation': ['JavaScript', 'React', 'Node.js', 'Python'],
-        'Marketing Strategy': ['Marketing Strategy']
-      };
-
-      if (searchParams.serviceType && skillMapping[searchParams.serviceType]) {
-        setFilters(prev => ({
-          ...prev,
-          skills: skillMapping[searchParams.serviceType] || []
-        }));
-      }
-    }
-  }, [searchParams]);
 
   useEffect(() => {
     loadUsers();
@@ -196,11 +158,20 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
   };
 
   const getRandomSkills = () => {
+    const availableSkills = [
+      'JavaScript', 'React', 'Node.js', 'Python', 'UI/UX Design', 
+      'Product Strategy', 'Legal Review', 'Marketing Strategy', 'Data Analysis',
+      'Fundraising', 'Code Review', 'Design Critique', 'Business Development'
+    ];
     const shuffled = [...availableSkills].sort(() => 0.5 - Math.random());
     return shuffled.slice(0, Math.floor(Math.random() * 4) + 2);
   };
 
   const getRandomWorkTypes = () => {
+    const availableWorkTypes = [
+      'consulting', 'mentoring', 'code_review', 'design_critique', 
+      'strategy_session', 'legal_review', 'technical_consultation'
+    ];
     const shuffled = [...availableWorkTypes].sort(() => 0.5 - Math.random());
     return shuffled.slice(0, Math.floor(Math.random() * 3) + 1);
   };
@@ -220,51 +191,44 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
       );
     }
 
-    // Availability filter
-    if (filters.availability !== 'all') {
-      filtered = filtered.filter(user => {
-        if (filters.availability === 'available') return user.is_available_for_work;
-        if (filters.availability === 'busy') return !user.is_available_for_work;
-        return true;
-      });
-    }
+    // Service Type filter - map to relevant skills
+    if (filters.serviceType) {
+      const skillMapping: { [key: string]: string[] } = {
+        'Design Critique': ['UI/UX Design', 'Design Critique'],
+        'Code Review': ['JavaScript', 'React', 'Node.js', 'Python', 'Code Review'],
+        'Strategy Consultation': ['Product Strategy', 'Business Development'],
+        'Legal Review': ['Legal Review'],
+        'Financial Analysis': ['Data Analysis', 'Fundraising'],
+        'Technical Consultation': ['JavaScript', 'React', 'Node.js', 'Python'],
+        'Marketing Strategy': ['Marketing Strategy'],
+        'Mentorship': ['Product Strategy', 'Business Development']
+      };
 
-    // Location filter
-    if (filters.location) {
-      filtered = filtered.filter(user => 
-        user.location?.toLowerCase().includes(filters.location.toLowerCase())
-      );
-    }
-
-    // Skills filter
-    if (filters.skills.length > 0) {
-      filtered = filtered.filter(user =>
-        user.skills?.some(skill => 
-          filters.skills.some(filterSkill => 
-            skill.toLowerCase().includes(filterSkill.toLowerCase())
+      const relevantSkills = skillMapping[filters.serviceType] || [];
+      if (relevantSkills.length > 0) {
+        filtered = filtered.filter(user =>
+          user.skills?.some(skill => 
+            relevantSkills.some(relevantSkill => 
+              skill.toLowerCase().includes(relevantSkill.toLowerCase())
+            )
           )
-        )
-      );
+        );
+      }
     }
 
-    // Work types filter
-    if (filters.workTypes.length > 0) {
+    // Industry filter - could map to user bio/background
+    if (filters.industry && filters.industry !== 'Other') {
       filtered = filtered.filter(user =>
-        user.preferred_work_types?.some(workType =>
-          filters.workTypes.includes(workType)
+        user.bio?.toLowerCase().includes(filters.industry.toLowerCase()) ||
+        user.skills?.some(skill => 
+          skill.toLowerCase().includes(filters.industry.toLowerCase())
         )
       );
     }
 
-    // Time balance filter
-    if (filters.timeBalance !== 'all') {
-      filtered = filtered.filter(user => {
-        const balance = user.time_balance_hours || 0;
-        if (filters.timeBalance === 'positive') return balance > 0;
-        if (filters.timeBalance === 'negative') return balance < 0;
-        if (filters.timeBalance === 'balanced') return Math.abs(balance) < 0.5;
-        return true;
-      });
+    // Timeline filter - could affect availability
+    if (filters.timeline === 'Immediate') {
+      filtered = filtered.filter(user => user.is_available_for_work);
     }
 
     setFilteredUsers(filtered);
@@ -275,31 +239,14 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
     setIsProfileModalOpen(true);
   };
 
-  const toggleSkillFilter = (skill: string) => {
-    setFilters(prev => ({
-      ...prev,
-      skills: prev.skills.includes(skill)
-        ? prev.skills.filter(s => s !== skill)
-        : [...prev.skills, skill]
-    }));
-  };
-
-  const toggleWorkTypeFilter = (workType: string) => {
-    setFilters(prev => ({
-      ...prev,
-      workTypes: prev.workTypes.includes(workType)
-        ? prev.workTypes.filter(w => w !== workType)
-        : [...prev.workTypes, workType]
-    }));
-  };
-
   const clearFilters = () => {
     setFilters({
-      availability: 'all',
-      location: '',
-      skills: [],
-      workTypes: [],
-      timeBalance: 'all'
+      serviceType: '',
+      deliverableFormat: '',
+      timeline: '',
+      industry: '',
+      timeEstimate: '',
+      companyStage: ''
     });
     setSearchQuery('');
   };
@@ -323,16 +270,13 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
     return 'text-gray-600';
   };
 
-  const formatWorkType = (workType: string) => {
-    return workType.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-  };
-
   const activeFiltersCount = 
-    (filters.availability !== 'all' ? 1 : 0) +
-    (filters.location ? 1 : 0) +
-    filters.skills.length +
-    filters.workTypes.length +
-    (filters.timeBalance !== 'all' ? 1 : 0);
+    (filters.serviceType ? 1 : 0) +
+    (filters.deliverableFormat ? 1 : 0) +
+    (filters.timeline ? 1 : 0) +
+    (filters.industry ? 1 : 0) +
+    (filters.timeEstimate ? 1 : 0) +
+    (filters.companyStage ? 1 : 0);
 
   return (
     <div className="min-h-screen w-full bg-amber-200">
@@ -442,87 +386,99 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
           {/* Filters Panel */}
           {showFilters && (
             <div className="mt-6 pt-6 border-t border-gray-200 space-y-6">
-              {/* Availability Filter */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">Availability</label>
-                <div className="flex gap-2">
-                  {[
-                    { value: 'all', label: 'All' },
-                    { value: 'available', label: 'Available' },
-                    { value: 'busy', label: 'Busy' }
-                  ].map(option => (
-                    <button
-                      key={option.value}
-                      onClick={() => setFilters(prev => ({ ...prev, availability: option.value as any }))}
-                      className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 ${
-                        filters.availability === option.value
-                          ? 'bg-black text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Service Type */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Service Type</label>
+                  <select
+                    value={filters.serviceType}
+                    onChange={(e) => setFilters(prev => ({ ...prev, serviceType: e.target.value }))}
+                    className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  >
+                    <option value="">All service types</option>
+                    {serviceTypes.map(type => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Deliverable Format */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Deliverable Format</label>
+                  <select
+                    value={filters.deliverableFormat}
+                    onChange={(e) => setFilters(prev => ({ ...prev, deliverableFormat: e.target.value }))}
+                    className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  >
+                    <option value="">All formats</option>
+                    {deliverableFormats.map(format => (
+                      <option key={format} value={format}>{format}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              {/* Location Filter */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">Location</label>
-                <select
-                  value={filters.location}
-                  onChange={(e) => setFilters(prev => ({ ...prev, location: e.target.value }))}
-                  className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
-                >
-                  <option value="">All locations</option>
-                  {availableLocations.map(location => (
-                    <option key={location} value={location}>{location}</option>
-                  ))}
-                </select>
-              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Timeline */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Timeline</label>
+                  <select
+                    value={filters.timeline}
+                    onChange={(e) => setFilters(prev => ({ ...prev, timeline: e.target.value }))}
+                    className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  >
+                    <option value="">All timelines</option>
+                    {timelines.map(timeline => (
+                      <option key={timeline} value={timeline}>{timeline}</option>
+                    ))}
+                  </select>
+                </div>
 
-              {/* Skills Filter */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">Skills</label>
-                <div className="flex flex-wrap gap-2">
-                  {availableSkills.map(skill => (
-                    <button
-                      key={skill}
-                      onClick={() => toggleSkillFilter(skill)}
-                      className={`px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                        filters.skills.includes(skill)
-                          ? 'bg-amber-500 text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      {skill}
-                    </button>
-                  ))}
+                {/* Industry */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Industry</label>
+                  <select
+                    value={filters.industry}
+                    onChange={(e) => setFilters(prev => ({ ...prev, industry: e.target.value }))}
+                    className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  >
+                    <option value="">All industries</option>
+                    {industries.map(industry => (
+                      <option key={industry} value={industry}>{industry}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              {/* Time Balance Filter */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-3">Time Balance</label>
-                <div className="flex gap-2 flex-wrap">
-                  {[
-                    { value: 'all', label: 'All' },
-                    { value: 'positive', label: 'Owed Time (+)' },
-                    { value: 'negative', label: 'Owes Time (-)' },
-                    { value: 'balanced', label: 'Balanced' }
-                  ].map(option => (
-                    <button
-                      key={option.value}
-                      onClick={() => setFilters(prev => ({ ...prev, timeBalance: option.value as any }))}
-                      className={`px-4 py-2 rounded-xl font-medium transition-all duration-200 text-sm ${
-                        filters.timeBalance === option.value
-                          ? 'bg-black text-white'
-                          : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                      }`}
-                    >
-                      {option.label}
-                    </button>
-                  ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Time Estimate */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Time Estimate</label>
+                  <select
+                    value={filters.timeEstimate}
+                    onChange={(e) => setFilters(prev => ({ ...prev, timeEstimate: e.target.value }))}
+                    className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  >
+                    <option value="">All time estimates</option>
+                    {timeEstimates.map(estimate => (
+                      <option key={estimate} value={estimate}>{estimate}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Company Stage */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Company Stage</label>
+                  <select
+                    value={filters.companyStage}
+                    onChange={(e) => setFilters(prev => ({ ...prev, companyStage: e.target.value }))}
+                    className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  >
+                    <option value="">All company stages</option>
+                    {companyStages.map(stage => (
+                      <option key={stage} value={stage}>{stage}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>
