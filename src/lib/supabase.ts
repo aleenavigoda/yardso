@@ -13,10 +13,12 @@ if (!import.meta.env.VITE_SUPABASE_ANON_KEY) {
   console.warn('VITE_SUPABASE_ANON_KEY not found in environment variables')
 }
 
+let supabase: any
+
 if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('your-project') || supabaseAnonKey.includes('your-anon-key')) {
   console.error('Missing or invalid Supabase environment variables')
   // Create a mock client that won't crash the app
-  export const supabase = {
+  supabase = {
     auth: {
       getSession: () => Promise.resolve({ data: { session: null }, error: null }),
       onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
@@ -33,10 +35,12 @@ if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('your-project') || 
     rpc: () => Promise.resolve({ data: null, error: null })
   }
 } else {
-  export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  supabase = createClient(supabaseUrl, supabaseAnonKey, {
     auth: {
       // Override the redirect URL for development
       redirectTo: window.location.origin
     }
   })
 }
+
+export { supabase }
