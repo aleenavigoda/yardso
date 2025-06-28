@@ -244,7 +244,7 @@ function App() {
     setUserProfile(null);
   };
 
-  // Simple auth initialization - no complex logic
+  // Simple auth initialization
   useEffect(() => {
     let mounted = true;
 
@@ -276,6 +276,7 @@ function App() {
           clearAuthState();
         }
       } finally {
+        // ALWAYS set initializing to false
         if (mounted) {
           setIsInitializing(false);
         }
