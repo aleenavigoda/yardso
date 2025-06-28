@@ -244,16 +244,12 @@ function App() {
     setUserProfile(null);
   };
 
-  // Enhanced auth initialization with better session handling
+  // Simplified auth initialization
   useEffect(() => {
     const initAuth = async () => {
       try {
-        setIsInitializing(true);
         console.log('Initializing authentication...');
 
-        // First, clear any potentially stale state
-        // This helps with refresh token issues
-        
         // Check for email confirmation tokens in URL hash
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
         const accessToken = hashParams.get('access_token');
@@ -261,10 +257,6 @@ function App() {
         
         if (accessToken && refreshToken) {
           console.log('Found auth tokens in URL, setting session...');
-          
-          // Clear any existing session first to avoid conflicts
-          await supabase.auth.signOut();
-          
           const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken
@@ -272,42 +264,16 @@ function App() {
           
           if (!error && data.user) {
             await handleAuthSuccess(data.user);
-          } else {
-            console.error('Error setting session from URL tokens:', error);
-            clearAuthState();
           }
           
-          // Clean up URL
           window.history.replaceState({}, document.title, window.location.pathname);
-          setIsInitializing(false);
           return;
         }
 
         // Check for existing session
-        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-        
-        if (sessionError) {
-          console.error('Error getting session:', sessionError);
-          clearAuthState();
-          setIsInitializing(false);
-          return;
-        }
+        const { data: { session } } = await supabase.auth.getSession();
         
         if (session && session.user) {
-          console.log('Found existing session for user:', session.user.id);
-          
-          // Check if session is expired or about to expire
-          const now = Math.floor(Date.now() / 1000);
-          const expiresAt = session.expires_at || 0;
-          
-          if (expiresAt <= now) {
-            console.log('Session expired, clearing auth state');
-            await supabase.auth.signOut();
-            clearAuthState();
-            setIsInitializing(false);
-            return;
-          }
-          
           // Check if we have profile in localStorage first
           const storedProfile = localStorage.getItem('userProfile');
           if (storedProfile) {
@@ -359,18 +325,12 @@ function App() {
 
     // Listen for auth state changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('Auth state changed:', event, session?.user?.id);
+      console.log('Auth state changed:', event);
       
-      if (event === 'SIGNED_IN' && session?.user) {
+      if (event === 'SIGNED_IN' && session) {
         await handleAuthSuccess(session.user);
       } else if (event === 'SIGNED_OUT') {
         clearAuthState();
-      } else if (event === 'TOKEN_REFRESHED' && session?.user) {
-        console.log('Token refreshed, updating session');
-        // Don't need to do anything special, just log it
-      } else if (event === 'USER_UPDATED' && session?.user) {
-        console.log('User updated, refreshing profile');
-        await handleAuthSuccess(session.user);
       }
     });
 
