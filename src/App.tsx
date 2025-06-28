@@ -244,14 +244,23 @@ function App() {
     setUserProfile(null);
   };
 
-  // Initialize auth state
+  // Initialize auth state with timeout protection
   useEffect(() => {
     let mounted = true;
+    let timeoutId: NodeJS.Timeout;
 
     const initAuth = async () => {
       console.log('Starting auth initialization...');
       
       try {
+        // Set a timeout to prevent infinite loading
+        timeoutId = setTimeout(() => {
+          if (mounted) {
+            console.log('Auth initialization timeout - proceeding without auth');
+            setIsInitializing(false);
+          }
+        }, 5000); // 5 second timeout
+
         // Get current session
         const { data: { session }, error } = await supabase.auth.getSession();
         
@@ -282,6 +291,7 @@ function App() {
       } finally {
         console.log('Auth initialization complete, setting isInitializing to false');
         if (mounted) {
+          clearTimeout(timeoutId);
           setIsInitializing(false);
         }
       }
@@ -304,6 +314,7 @@ function App() {
 
     return () => {
       mounted = false;
+      clearTimeout(timeoutId);
       subscription.unsubscribe();
     };
   }, []);
