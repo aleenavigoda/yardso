@@ -407,11 +407,11 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
   };
 
   const renderTimeFlows = () => (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {transactions.map((transaction) => (
-        <div key={transaction.id} className="flex items-start gap-4 p-4 hover:bg-gray-50 rounded-xl transition-colors duration-200">
+        <div key={transaction.id} className="flex items-start gap-3 p-4 hover:bg-gray-50 rounded-xl transition-colors duration-200">
           {/* Avatar(s) */}
-          <div className="flex items-center">
+          <div className="flex items-center flex-shrink-0">
             {transaction.is_group ? (
               <div className="flex -space-x-2">
                 <button
@@ -458,50 +458,104 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
 
           {/* Content */}
           <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <button
-                onClick={() => handleProfileClick(transaction.giver)}
-                className="font-medium text-gray-900 hover:text-blue-600 transition-colors duration-200"
-              >
-                {transaction.giver.display_name}
-              </button>
-              <span className="text-gray-600">
-                {transaction.is_group ? 'facilitated' : (transaction.is_balanced ? 'exchanged' : 'provided')}
-              </span>
-              <span className={`font-medium ${getServiceTypeColor(transaction.service_type)}`}>
-                {transaction.hours}h {getServiceTypeLabel(transaction.service_type)}
-              </span>
-              <span className="text-gray-600">
-                {transaction.is_group ? 'with' : (transaction.is_balanced ? 'with' : 'to')}
-              </span>
-              {transaction.is_group ? (
-                <span className="font-medium text-gray-900">
-                  {transaction.receivers.map((r, index) => (
-                    <button
-                      key={r.id}
-                      onClick={() => handleProfileClick(r)}
-                      className="hover:text-blue-600 transition-colors duration-200"
-                    >
-                      {r.display_name}
-                      {index < transaction.receivers.length - 1 && ', '}
-                    </button>
-                  ))}
-                  {transaction.receivers.length > 2 && ` and ${transaction.receivers.length - 2} others`}
-                </span>
-              ) : (
+            {/* Mobile Layout */}
+            <div className="block md:hidden">
+              <div className="mb-2">
                 <button
-                  onClick={() => handleProfileClick(transaction.receivers[0])}
+                  onClick={() => handleProfileClick(transaction.giver)}
                   className="font-medium text-gray-900 hover:text-blue-600 transition-colors duration-200"
                 >
-                  {transaction.receivers[0].display_name}
+                  {transaction.giver.display_name}
                 </button>
-              )}
+                <span className="text-gray-600 ml-1">
+                  {transaction.is_group ? 'facilitated' : (transaction.is_balanced ? 'exchanged' : 'provided')}
+                </span>
+              </div>
+              <div className="mb-2">
+                <span className={`font-medium ${getServiceTypeColor(transaction.service_type)}`}>
+                  {transaction.hours}h {getServiceTypeLabel(transaction.service_type)}
+                </span>
+              </div>
+              <div className="mb-2">
+                <span className="text-gray-600">
+                  {transaction.is_group ? 'with' : (transaction.is_balanced ? 'with' : 'to')}
+                </span>
+                {transaction.is_group ? (
+                  <span className="font-medium text-gray-900 ml-1">
+                    {transaction.receivers.map((r, index) => (
+                      <button
+                        key={r.id}
+                        onClick={() => handleProfileClick(r)}
+                        className="hover:text-blue-600 transition-colors duration-200"
+                      >
+                        {r.display_name}
+                        {index < transaction.receivers.length - 1 && ', '}
+                      </button>
+                    ))}
+                    {transaction.receivers.length > 2 && ` and ${transaction.receivers.length - 2} others`}
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => handleProfileClick(transaction.receivers[0])}
+                    className="font-medium text-gray-900 hover:text-blue-600 transition-colors duration-200 ml-1"
+                  >
+                    {transaction.receivers[0].display_name}
+                  </button>
+                )}
+              </div>
+              <div className="text-sm text-gray-500">
+                <div className="mb-1">"{transaction.description}"</div>
+                <div>{formatTimeAgo(transaction.created_at)}</div>
+              </div>
             </div>
-            
-            <div className="flex items-center gap-4 text-sm text-gray-500">
-              <span>"{transaction.description}"</span>
-              <span>•</span>
-              <span>{formatTimeAgo(transaction.created_at)}</span>
+
+            {/* Desktop Layout */}
+            <div className="hidden md:block">
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <button
+                  onClick={() => handleProfileClick(transaction.giver)}
+                  className="font-medium text-gray-900 hover:text-blue-600 transition-colors duration-200"
+                >
+                  {transaction.giver.display_name}
+                </button>
+                <span className="text-gray-600">
+                  {transaction.is_group ? 'facilitated' : (transaction.is_balanced ? 'exchanged' : 'provided')}
+                </span>
+                <span className={`font-medium ${getServiceTypeColor(transaction.service_type)}`}>
+                  {transaction.hours}h {getServiceTypeLabel(transaction.service_type)}
+                </span>
+                <span className="text-gray-600">
+                  {transaction.is_group ? 'with' : (transaction.is_balanced ? 'with' : 'to')}
+                </span>
+                {transaction.is_group ? (
+                  <span className="font-medium text-gray-900">
+                    {transaction.receivers.map((r, index) => (
+                      <button
+                        key={r.id}
+                        onClick={() => handleProfileClick(r)}
+                        className="hover:text-blue-600 transition-colors duration-200"
+                      >
+                        {r.display_name}
+                        {index < transaction.receivers.length - 1 && ', '}
+                      </button>
+                    ))}
+                    {transaction.receivers.length > 2 && ` and ${transaction.receivers.length - 2} others`}
+                  </span>
+                ) : (
+                  <button
+                    onClick={() => handleProfileClick(transaction.receivers[0])}
+                    className="font-medium text-gray-900 hover:text-blue-600 transition-colors duration-200"
+                  >
+                    {transaction.receivers[0].display_name}
+                  </button>
+                )}
+              </div>
+              
+              <div className="flex items-center gap-4 text-sm text-gray-500">
+                <span>"{transaction.description}"</span>
+                <span>•</span>
+                <span>{formatTimeAgo(transaction.created_at)}</span>
+              </div>
             </div>
           </div>
 
@@ -535,71 +589,71 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
   );
 
   const renderDiscover = () => (
-    <div className="space-y-6">
+    <div className="space-y-4">
       {bounties.map((bounty) => (
-        <div key={bounty.id} className="bg-white rounded-xl p-6 border border-gray-200 hover:border-gray-300 transition-colors duration-200">
+        <div key={bounty.id} className="bg-white rounded-xl p-4 md:p-6 border border-gray-200 hover:border-gray-300 transition-colors duration-200">
           <div className="flex items-start justify-between mb-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
-                <h3 className="text-lg font-semibold text-gray-900">{bounty.title}</h3>
-                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getBountyTypeColor(bounty.service_type)}`}>
+            <div className="flex-1 min-w-0">
+              <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 mb-2">
+                <h3 className="text-lg font-semibold text-gray-900 break-words">{bounty.title}</h3>
+                <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getBountyTypeColor(bounty.service_type)} self-start`}>
                   {bounty.service_type}
                 </span>
               </div>
-              <p className="text-gray-600 text-sm mb-3">{bounty.description}</p>
+              <p className="text-gray-600 text-sm mb-3 break-words">{bounty.description}</p>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
             <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Clock size={14} />
-              <span>{bounty.time_estimate}</span>
+              <Clock size={14} className="flex-shrink-0" />
+              <span className="truncate">{bounty.time_estimate}</span>
             </div>
             <div className="flex items-center gap-2 text-sm text-gray-600">
-              <Calendar size={14} />
-              <span>{bounty.timeline}</span>
+              <Calendar size={14} className="flex-shrink-0" />
+              <span className="truncate">{bounty.timeline}</span>
             </div>
             {bounty.budget_range && (
               <div className="flex items-center gap-2 text-sm text-gray-600">
-                <DollarSign size={14} />
-                <span>{bounty.budget_range}</span>
+                <DollarSign size={14} className="flex-shrink-0" />
+                <span className="truncate">{bounty.budget_range}</span>
               </div>
             )}
             {bounty.location && (
               <div className="flex items-center gap-2 text-sm text-gray-600">
-                <MapPin size={14} />
-                <span>{bounty.location}</span>
+                <MapPin size={14} className="flex-shrink-0" />
+                <span className="truncate">{bounty.location}</span>
               </div>
             )}
           </div>
 
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
               <button
                 onClick={() => handleProfileClick({ 
                   id: 'bounty-poster', 
                   full_name: bounty.posted_by, 
                   display_name: bounty.posted_by.split(' ')[0] 
                 })}
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${getAvatarColor(bounty.posted_by)} hover:scale-110 transition-transform duration-200`}
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${getAvatarColor(bounty.posted_by)} hover:scale-110 transition-transform duration-200 flex-shrink-0`}
               >
                 {getInitials(bounty.posted_by)}
               </button>
-              <div>
+              <div className="min-w-0 flex-1">
                 <button
                   onClick={() => handleProfileClick({ 
                     id: 'bounty-poster', 
                     full_name: bounty.posted_by, 
                     display_name: bounty.posted_by.split(' ')[0] 
                   })}
-                  className="text-sm font-medium text-gray-900 hover:text-blue-600 transition-colors duration-200"
+                  className="text-sm font-medium text-gray-900 hover:text-blue-600 transition-colors duration-200 block truncate"
                 >
                   {bounty.posted_by}
                 </button>
                 <p className="text-xs text-gray-500">{formatTimeAgo(bounty.posted_at)}</p>
               </div>
             </div>
-            <button className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors duration-200 text-sm font-medium">
+            <button className="bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition-colors duration-200 text-sm font-medium flex-shrink-0 ml-3">
               Apply
             </button>
           </div>
@@ -640,7 +694,8 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
               }`}
             >
               <TrendingUp size={16} />
-              <span>Time Flows</span>
+              <span className="hidden sm:inline">Time Flows</span>
+              <span className="sm:hidden">Flows</span>
             </button>
             <button
               onClick={() => setActiveTab('discover')}
@@ -657,7 +712,7 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
         </div>
 
         {/* Content */}
-        <div className="bg-white rounded-3xl p-8 shadow-lg border border-amber-100">
+        <div className="bg-white rounded-3xl p-4 md:p-8 shadow-lg border border-amber-100">
           <div className="flex items-center gap-3 mb-6">
             {activeTab === 'flows' ? (
               <>
@@ -677,8 +732,8 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
               {[1, 2, 3].map((i) => (
                 <div key={i} className="animate-pulse">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-gray-200 rounded-full"></div>
-                    <div className="flex-1">
+                    <div className="w-10 h-10 bg-gray-200 rounded-full flex-shrink-0"></div>
+                    <div className="flex-1 min-w-0">
                       <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
                       <div className="h-3 bg-gray-200 rounded w-1/2"></div>
                     </div>
