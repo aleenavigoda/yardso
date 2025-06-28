@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { TrendingUp, Clock, Users, ArrowUpDown, Search, MapPin, DollarSign, Calendar } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import AuthenticatedHeader from './AuthenticatedHeader';
+import ProfileModal from './ProfileModal';
 
 interface TimeTransaction {
   id: string;
@@ -60,6 +61,16 @@ interface WorkBounty {
   status: 'open' | 'in_progress' | 'completed';
 }
 
+interface ProfileData {
+  id: string;
+  full_name: string;
+  display_name: string;
+  bio?: string;
+  location?: string;
+  avatar_url?: string;
+  is_available_for_work?: boolean;
+}
+
 interface FeedProps {
   onBack: () => void;
   onDashboardClick: () => void;
@@ -71,6 +82,8 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
   const [transactions, setTransactions] = useState<GroupedTransaction[]>([]);
   const [bounties, setBounties] = useState<WorkBounty[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedProfile, setSelectedProfile] = useState<ProfileData | null>(null);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   useEffect(() => {
     if (activeTab === 'flows') {
@@ -79,6 +92,21 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
       loadBounties();
     }
   }, [activeTab]);
+
+  const handleProfileClick = (profile: { id: string; full_name: string; display_name: string }) => {
+    // Mock profile data - in a real app, you'd fetch this from the database
+    const mockProfileData: ProfileData = {
+      id: profile.id,
+      full_name: profile.full_name,
+      display_name: profile.display_name,
+      bio: 'Experienced professional in their field with a passion for helping others grow and succeed.',
+      location: 'San Francisco, CA',
+      is_available_for_work: true
+    };
+    
+    setSelectedProfile(mockProfileData);
+    setIsProfileModalOpen(true);
+  };
 
   const loadTransactions = async () => {
     try {
@@ -386,31 +414,44 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
           <div className="flex items-center">
             {transaction.is_group ? (
               <div className="flex -space-x-2">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium ${getAvatarColor(transaction.giver.full_name)} border-2 border-white`}>
+                <button
+                  onClick={() => handleProfileClick(transaction.giver)}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium ${getAvatarColor(transaction.giver.full_name)} border-2 border-white hover:scale-110 transition-transform duration-200`}
+                >
                   {getInitials(transaction.giver.display_name)}
-                </div>
+                </button>
                 <div className="w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-600 text-xs font-medium border-2 border-white">
                   <Users size={12} />
                 </div>
                 {transaction.receivers.slice(0, 2).map((receiver, index) => (
-                  <div key={receiver.id} className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium ${getAvatarColor(receiver.full_name)} border-2 border-white`}>
+                  <button
+                    key={receiver.id}
+                    onClick={() => handleProfileClick(receiver)}
+                    className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-medium ${getAvatarColor(receiver.full_name)} border-2 border-white hover:scale-110 transition-transform duration-200`}
+                  >
                     {getInitials(receiver.display_name)}
-                  </div>
+                  </button>
                 ))}
               </div>
             ) : (
               <div className="flex items-center">
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium ${getAvatarColor(transaction.giver.full_name)}`}>
+                <button
+                  onClick={() => handleProfileClick(transaction.giver)}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium ${getAvatarColor(transaction.giver.full_name)} hover:scale-110 transition-transform duration-200`}
+                >
                   {getInitials(transaction.giver.display_name)}
-                </div>
+                </button>
                 {transaction.is_balanced && (
                   <div className="mx-2">
                     <ArrowUpDown size={16} className="text-green-600" />
                   </div>
                 )}
-                <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium ${getAvatarColor(transaction.receivers[0].full_name)}`}>
+                <button
+                  onClick={() => handleProfileClick(transaction.receivers[0])}
+                  className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium ${getAvatarColor(transaction.receivers[0].full_name)} hover:scale-110 transition-transform duration-200`}
+                >
                   {getInitials(transaction.receivers[0].display_name)}
-                </div>
+                </button>
               </div>
             )}
           </div>
@@ -418,9 +459,12 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
           {/* Content */}
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <span className="font-medium text-gray-900">
+              <button
+                onClick={() => handleProfileClick(transaction.giver)}
+                className="font-medium text-gray-900 hover:text-blue-600 transition-colors duration-200"
+              >
                 {transaction.giver.display_name}
-              </span>
+              </button>
               <span className="text-gray-600">
                 {transaction.is_group ? 'facilitated' : (transaction.is_balanced ? 'exchanged' : 'provided')}
               </span>
@@ -432,13 +476,25 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
               </span>
               {transaction.is_group ? (
                 <span className="font-medium text-gray-900">
-                  {transaction.receivers.map(r => r.display_name).join(', ')}
+                  {transaction.receivers.map((r, index) => (
+                    <button
+                      key={r.id}
+                      onClick={() => handleProfileClick(r)}
+                      className="hover:text-blue-600 transition-colors duration-200"
+                    >
+                      {r.display_name}
+                      {index < transaction.receivers.length - 1 && ', '}
+                    </button>
+                  ))}
                   {transaction.receivers.length > 2 && ` and ${transaction.receivers.length - 2} others`}
                 </span>
               ) : (
-                <span className="font-medium text-gray-900">
+                <button
+                  onClick={() => handleProfileClick(transaction.receivers[0])}
+                  className="font-medium text-gray-900 hover:text-blue-600 transition-colors duration-200"
+                >
                   {transaction.receivers[0].display_name}
-                </span>
+                </button>
               )}
             </div>
             
@@ -519,11 +575,27 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
 
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${getAvatarColor(bounty.posted_by)}`}>
+              <button
+                onClick={() => handleProfileClick({ 
+                  id: 'bounty-poster', 
+                  full_name: bounty.posted_by, 
+                  display_name: bounty.posted_by.split(' ')[0] 
+                })}
+                className={`w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-medium ${getAvatarColor(bounty.posted_by)} hover:scale-110 transition-transform duration-200`}
+              >
                 {getInitials(bounty.posted_by)}
-              </div>
+              </button>
               <div>
-                <p className="text-sm font-medium text-gray-900">{bounty.posted_by}</p>
+                <button
+                  onClick={() => handleProfileClick({ 
+                    id: 'bounty-poster', 
+                    full_name: bounty.posted_by, 
+                    display_name: bounty.posted_by.split(' ')[0] 
+                  })}
+                  className="text-sm font-medium text-gray-900 hover:text-blue-600 transition-colors duration-200"
+                >
+                  {bounty.posted_by}
+                </button>
                 <p className="text-xs text-gray-500">{formatTimeAgo(bounty.posted_at)}</p>
               </div>
             </div>
@@ -619,6 +691,13 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
           )}
         </div>
       </div>
+
+      {/* Profile Modal */}
+      <ProfileModal
+        isOpen={isProfileModalOpen}
+        onClose={() => setIsProfileModalOpen(false)}
+        profile={selectedProfile}
+      />
     </div>
   );
 };
