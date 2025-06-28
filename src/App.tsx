@@ -277,9 +277,19 @@ function App() {
     setUserProfile(null);
   };
 
-  // Fixed auth initialization with JWT session error handling
+  // Fixed auth initialization with better error handling for deployment
   useEffect(() => {
     let isMounted = true;
+    
+    // Check if Supabase is properly configured
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+    
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.warn('Supabase environment variables not configured, running in demo mode');
+      setIsInitializing(false);
+      return;
+    }
     
     // Set up auth state listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
