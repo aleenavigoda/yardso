@@ -21,12 +21,6 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [showConfirmation, setShowConfirmation] = useState(false);
-  const [debugInfo, setDebugInfo] = useState<string[]>([]);
-
-  const addDebugInfo = (info: string) => {
-    console.log('SIGNUP DEBUG:', info);
-    setDebugInfo(prev => [...prev, `${new Date().toLocaleTimeString()}: ${info}`]);
-  };
 
   const handleUrlChange = (index: number, value: string) => {
     const newUrls = [...formData.urls];
@@ -47,7 +41,6 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
     e.preventDefault();
     setIsLoading(true);
     setError('');
-    setDebugInfo([]);
 
     // Validate passwords match
     if (formData.password !== formData.confirmPassword) {
@@ -63,7 +56,7 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
     }
 
     try {
-      addDebugInfo('Starting signup process...');
+      console.log('Starting sign up process...');
       
       // Prepare URLs data
       const validUrls = formData.urls.filter(url => url.trim() !== '');
@@ -72,9 +65,9 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
         type: detectUrlType(url.trim())
       }));
 
-      addDebugInfo(`Prepared ${urlsData.length} URLs`);
+      console.log('Prepared URLs:', urlsData);
 
-      // Store pending profile data
+      // First, store pending profile data
       const pendingProfileData = {
         email: formData.email.toLowerCase().trim(),
         full_name: formData.fullName.trim(),
@@ -83,40 +76,26 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
         time_logging_data: timeLoggingData || null
       };
 
-      addDebugInfo('Attempting to insert pending profile data...');
+      console.log('Inserting pending profile:', pendingProfileData);
 
-      // Test database connection first
-      const { data: testData, error: testError } = await supabase
-        .from('pending_profiles')
-        .select('count')
-        .limit(1);
-
-      if (testError) {
-        addDebugInfo(`Database connection test failed: ${testError.message}`);
-        throw new Error(`Database connection failed: ${testError.message}`);
-      }
-
-      addDebugInfo('Database connection successful');
-
-      // Insert into pending_profiles table
+      // Insert into pending_profiles table using direct SQL
       const { data: pendingProfile, error: pendingError } = await supabase
-        .from('pending_profiles')
-        .insert(pendingProfileData)
-        .select()
-        .single();
+        .rpc('insert_pending_profile', {
+          p_email: pendingProfileData.email,
+          p_full_name: pendingProfileData.full_name,
+          p_display_name: pendingProfileData.display_name,
+          p_urls: JSON.stringify(urlsData),
+          p_time_logging_data: timeLoggingData ? JSON.stringify(timeLoggingData) : null
+        });
 
       if (pendingError) {
-        addDebugInfo(`Pending profile error: ${pendingError.message}`);
-        addDebugInfo(`Error code: ${pendingError.code}`);
-        addDebugInfo(`Error details: ${JSON.stringify(pendingError.details)}`);
+        console.error('Pending profile error:', pendingError);
         throw new Error(`Failed to save profile data: ${pendingError.message}`);
       }
 
-      addDebugInfo(`Pending profile created with ID: ${pendingProfile.id}`);
+      console.log('Pending profile created successfully');
 
-      // Sign up with Supabase Auth
-      addDebugInfo('Starting Supabase Auth signup...');
-      
+      // Now sign up with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email.toLowerCase().trim(),
         password: formData.password,
@@ -128,28 +107,24 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
       });
 
       if (authError) {
-        addDebugInfo(`Auth error: ${authError.message}`);
-        // Clean up pending profile if auth fails
-        await supabase.from('pending_profiles').delete().eq('email', formData.email.toLowerCase().trim());
+        console.error('Auth error:', authError);
         throw authError;
       }
 
-      addDebugInfo(`Auth signup successful. User ID: ${authData.user?.id}`);
-      addDebugInfo(`Session exists: ${!!authData.session}`);
+      console.log('Auth signup successful:', authData);
 
       // Check if email confirmation is required
       if (authData.user && !authData.session) {
-        addDebugInfo('Email confirmation required');
+        console.log('Email confirmation required');
         setShowConfirmation(true);
       } else if (authData.user && authData.session) {
-        addDebugInfo('User signed in immediately');
+        console.log('User signed in immediately');
         onSignUpSuccess();
       } else {
-        addDebugInfo('No user data returned');
         throw new Error('No user data returned from sign up');
       }
     } catch (err: any) {
-      addDebugInfo(`Error: ${err.message}`);
+      console.error('Sign up error:', err);
       setError(err.message || 'An error occurred during sign up');
     } finally {
       setIsLoading(false);
@@ -240,16 +215,6 @@ const SignUpModal = ({ isOpen, onClose, timeLoggingData, onSignUpSuccess }: Sign
           {error && (
             <div className="bg-red-50 rounded-xl p-3 border border-red-200">
               <p className="text-red-800 text-sm">{error}</p>
-            </div>
-          )}
-
-          {/* Debug info for development */}
-          {debugInfo.length > 0 && (
-            <div className="bg-gray-50 rounded-xl p-3 text-left text-xs text-gray-600 max-h-32 overflow-y-auto">
-              <div className="font-semibold mb-2">Debug Info:</div>
-              {debugInfo.map((info, index) => (
-                <div key={index} className="mb-1">{info}</div>
-              ))}
             </div>
           )}
 

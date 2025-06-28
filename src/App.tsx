@@ -75,19 +75,33 @@ function App() {
         }
       }
 
-      // Create the profile
-      const { data: newProfile, error: profileError } = await supabase
+      // Check if profile already exists
+      const { data: existingProfile, error: existingError } = await supabase
         .from('profiles')
-        .insert(profileData)
-        .select()
+        .select('*')
+        .eq('user_id', user.id)
         .single();
 
-      if (profileError) {
-        console.error('Profile creation error:', profileError);
-        throw profileError;
-      }
+      let newProfile;
+      if (existingProfile) {
+        console.log('Profile already exists:', existingProfile.id);
+        newProfile = existingProfile;
+      } else {
+        // Create the profile
+        const { data: createdProfile, error: profileError } = await supabase
+          .from('profiles')
+          .insert(profileData)
+          .select()
+          .single();
 
-      console.log('Profile created:', newProfile.id);
+        if (profileError) {
+          console.error('Profile creation error:', profileError);
+          throw profileError;
+        }
+
+        console.log('Profile created:', createdProfile.id);
+        newProfile = createdProfile;
+      }
 
       // Add URLs if any
       if (urlsToAdd.length > 0) {
@@ -161,6 +175,18 @@ function App() {
         }
       } else {
         console.log('Using existing profile:', existingProfile.id);
+        
+        // Check for pending time log data even if profile exists
+        const pendingTimeLogData = localStorage.getItem('pendingTimeLog');
+        if (pendingTimeLogData) {
+          try {
+            const timeLogData = JSON.parse(pendingTimeLogData);
+            setPendingTimeLog(timeLogData);
+          } catch (e) {
+            console.error('Error parsing pending time log data:', e);
+            localStorage.removeItem('pendingTimeLog');
+          }
+        }
       }
 
       localStorage.setItem('userProfile', JSON.stringify(profile));
@@ -211,6 +237,18 @@ function App() {
               setUserProfile(profile);
               setIsAuthenticated(true);
               console.log('Loaded profile from localStorage');
+              
+              // Check for pending time log data
+              const pendingTimeLogData = localStorage.getItem('pendingTimeLog');
+              if (pendingTimeLogData) {
+                try {
+                  const timeLogData = JSON.parse(pendingTimeLogData);
+                  setPendingTimeLog(timeLogData);
+                } catch (e) {
+                  console.error('Error parsing pending time log data:', e);
+                  localStorage.removeItem('pendingTimeLog');
+                }
+              }
             } catch (e) {
               localStorage.removeItem('userProfile');
               await handleAuthSuccess(session.user);

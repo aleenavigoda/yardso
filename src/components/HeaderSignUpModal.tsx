@@ -63,6 +63,8 @@ const HeaderSignUpModal = ({ isOpen, onClose, onSignUpSuccess }: HeaderSignUpMod
         type: detectUrlType(url.trim())
       }));
 
+      console.log('Prepared URLs:', urlsData);
+
       // First, store pending profile data
       const pendingProfileData = {
         email: formData.email.toLowerCase().trim(),
@@ -73,19 +75,22 @@ const HeaderSignUpModal = ({ isOpen, onClose, onSignUpSuccess }: HeaderSignUpMod
 
       console.log('Inserting pending profile:', pendingProfileData);
 
-      // Insert into pending_profiles table
+      // Insert into pending_profiles table using RPC function
       const { data: pendingProfile, error: pendingError } = await supabase
-        .from('pending_profiles')
-        .insert(pendingProfileData)
-        .select()
-        .single();
+        .rpc('insert_pending_profile', {
+          p_email: pendingProfileData.email,
+          p_full_name: pendingProfileData.full_name,
+          p_display_name: pendingProfileData.display_name,
+          p_urls: JSON.stringify(urlsData),
+          p_time_logging_data: null
+        });
 
       if (pendingError) {
         console.error('Pending profile error:', pendingError);
         throw new Error(`Failed to save profile data: ${pendingError.message}`);
       }
 
-      console.log('Pending profile created:', pendingProfile);
+      console.log('Pending profile created successfully');
 
       // Now sign up with Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
@@ -100,8 +105,6 @@ const HeaderSignUpModal = ({ isOpen, onClose, onSignUpSuccess }: HeaderSignUpMod
 
       if (authError) {
         console.error('Auth error:', authError);
-        // Clean up pending profile if auth fails
-        await supabase.from('pending_profiles').delete().eq('email', formData.email.toLowerCase().trim());
         throw authError;
       }
 
