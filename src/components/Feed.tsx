@@ -70,6 +70,10 @@ interface ProfileData {
   location?: string;
   avatar_url?: string;
   is_available_for_work?: boolean;
+  expertise_tags?: string[];
+  tools_tags?: string[];
+  skills?: string[];
+  profile_type?: 'user' | 'agent' | 'external';
 }
 
 interface FeedProps {
@@ -94,19 +98,104 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
     }
   }, [activeTab]);
 
-  const handleProfileClick = (profile: { id: string; full_name: string; display_name: string }) => {
-    // Mock profile data - in a real app, you'd fetch this from the database
-    const mockProfileData: ProfileData = {
-      id: profile.id,
-      full_name: profile.full_name,
-      display_name: profile.display_name,
-      bio: 'Experienced professional in their field with a passion for helping others grow and succeed.',
-      location: 'San Francisco, CA',
-      is_available_for_work: true
-    };
-    
-    setSelectedProfile(mockProfileData);
-    setIsProfileModalOpen(true);
+  const handleProfileClick = async (profile: { id: string; full_name: string; display_name: string }) => {
+    try {
+      // Try to fetch the actual profile data from the database
+      let profileData: ProfileData | null = null;
+
+      // First try regular profiles table
+      const { data: userProfile } = await supabase
+        .from('profiles')
+        .select(`
+          id,
+          full_name,
+          display_name,
+          bio,
+          location,
+          avatar_url,
+          is_available_for_work
+        `)
+        .eq('id', profile.id)
+        .single();
+
+      if (userProfile) {
+        profileData = {
+          ...userProfile,
+          profile_type: 'user',
+          skills: getRandomSkills() // Add some mock skills for demo
+        };
+      } else {
+        // Try agent profiles table
+        const { data: agentProfile } = await supabase
+          .from('agent_profiles')
+          .select(`
+            id,
+            full_name,
+            display_name,
+            bio,
+            expertise_tags,
+            tools_tags
+          `)
+          .eq('id', profile.id)
+          .single();
+
+        if (agentProfile) {
+          profileData = {
+            ...agentProfile,
+            location: 'Virtual',
+            is_available_for_work: true,
+            profile_type: 'agent',
+            expertise_tags: agentProfile.expertise_tags,
+            tools_tags: agentProfile.tools_tags,
+            skills: [...(agentProfile.expertise_tags || []), ...(agentProfile.tools_tags || [])]
+          };
+        }
+      }
+
+      // If we couldn't find the profile in the database, create a mock one
+      if (!profileData) {
+        profileData = {
+          id: profile.id,
+          full_name: profile.full_name,
+          display_name: profile.display_name,
+          bio: 'Experienced professional in their field with a passion for helping others grow and succeed.',
+          location: 'San Francisco, CA',
+          is_available_for_work: true,
+          profile_type: 'user',
+          skills: getRandomSkills()
+        };
+      }
+      
+      setSelectedProfile(profileData);
+      setIsProfileModalOpen(true);
+    } catch (error) {
+      console.error('Error fetching profile:', error);
+      
+      // Fallback to mock profile data
+      const mockProfileData: ProfileData = {
+        id: profile.id,
+        full_name: profile.full_name,
+        display_name: profile.display_name,
+        bio: 'Experienced professional in their field with a passion for helping others grow and succeed.',
+        location: 'San Francisco, CA',
+        is_available_for_work: true,
+        profile_type: 'user',
+        skills: getRandomSkills()
+      };
+      
+      setSelectedProfile(mockProfileData);
+      setIsProfileModalOpen(true);
+    }
+  };
+
+  const getRandomSkills = () => {
+    const availableSkills = [
+      'JavaScript', 'React', 'Node.js', 'Python', 'UI/UX Design', 
+      'Product Strategy', 'Legal Review', 'Marketing Strategy', 'Data Analysis',
+      'Fundraising', 'Code Review', 'Design Critique', 'Business Development'
+    ];
+    const shuffled = [...availableSkills].sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, Math.floor(Math.random() * 4) + 2);
   };
 
   const loadTransactions = async () => {
