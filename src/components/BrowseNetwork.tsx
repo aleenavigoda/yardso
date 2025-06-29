@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, MapPin, Clock, Star, Users, ChevronDown, X, DollarSign, Calendar, Target, CheckCircle } from 'lucide-react';
+import { Search, Filter, MapPin, Clock, Star, Users, ChevronDown, X, DollarSign, Calendar, Target, CheckCircle, ExternalLink, Github, Linkedin, Twitter, Globe, Bot, UserCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import AuthenticatedHeader from './AuthenticatedHeader';
 import ProfileModal from './ProfileModal';
@@ -16,6 +16,13 @@ interface NetworkUser {
   skills?: string[];
   hourly_rate_range?: string;
   preferred_work_types?: string[];
+  profile_type: 'user' | 'agent' | 'external';
+  source_platform?: string;
+  source_url?: string;
+  company?: string;
+  job_title?: string;
+  follower_count?: number;
+  is_verified?: boolean;
 }
 
 interface SearchParams {
@@ -35,6 +42,7 @@ interface FilterState {
   industry: string;
   timeEstimate: string;
   companyStage: string;
+  profileType: string;
 }
 
 interface BrowseNetworkProps {
@@ -67,7 +75,8 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
     timeline: searchParams?.timeline || '',
     industry: searchParams?.industry || '',
     timeEstimate: searchParams?.timeEstimate || '',
-    companyStage: searchParams?.companyStage || ''
+    companyStage: searchParams?.companyStage || '',
+    profileType: ''
   });
 
   // Landing page search parameters - exact same as SearchForm
@@ -96,6 +105,13 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
     'Pre-seed', 'Seed', 'Series A', 'Series B+', 'Public Company', 'Not applicable'
   ];
 
+  const profileTypes = [
+    { value: '', label: 'All profiles' },
+    { value: 'user', label: 'Yard members' },
+    { value: 'agent', label: 'AI agents' },
+    { value: 'external', label: 'External profiles' }
+  ];
+
   useEffect(() => {
     loadUsers();
   }, []);
@@ -108,7 +124,7 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
     try {
       setIsLoading(true);
       
-      // Load both regular users and agent profiles
+      // Load regular users
       const { data: regularUsers, error: regularError } = await supabase
         .from('profiles')
         .select(`
@@ -126,6 +142,7 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
         .eq('is_agent', false)
         .limit(20);
 
+      // Load agent profiles
       const { data: agentUsers, error: agentError } = await supabase
         .from('agent_profiles')
         .select(`
@@ -138,21 +155,65 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
         `)
         .limit(10);
 
+      // Load external profiles
+      const { data: externalUsers, error: externalError } = await supabase
+        .from('external_profiles')
+        .select(`
+          id,
+          name,
+          display_name,
+          bio,
+          location,
+          source_platform,
+          source_url,
+          company,
+          job_title,
+          follower_count,
+          is_verified,
+          skills
+        `)
+        .not('name', 'is', null)
+        .limit(15);
+
       if (regularError) console.error('Error loading regular users:', regularError);
       if (agentError) console.error('Error loading agent users:', agentError);
+      if (externalError) console.error('Error loading external users:', externalError);
 
       // Combine and format users
       const allUsers: NetworkUser[] = [
+        // Regular users
         ...(regularUsers || []).map(user => ({
           ...user,
+          full_name: user.full_name || user.display_name,
           is_available_for_work: user.is_available_for_work ?? true,
-          skills: getRandomSkills(), // Mock skills for demo
+          skills: getRandomSkills(),
+          profile_type: 'user' as const,
         })),
+        // Agent profiles
         ...(agentUsers || []).map(user => ({
           ...user,
+          full_name: user.full_name || user.display_name,
           is_available_for_work: true,
-          skills: getRandomSkills(), // Mock skills for demo
-          preferred_work_types: getRandomWorkTypes(), // Mock work types for demo
+          skills: getRandomSkills(),
+          preferred_work_types: getRandomWorkTypes(),
+          profile_type: 'agent' as const,
+        })),
+        // External profiles
+        ...(externalUsers || []).map(user => ({
+          id: user.id,
+          full_name: user.name,
+          display_name: user.display_name,
+          bio: user.bio,
+          location: user.location,
+          is_available_for_work: true,
+          skills: user.skills || getRandomSkills(),
+          profile_type: 'external' as const,
+          source_platform: user.source_platform,
+          source_url: user.source_url,
+          company: user.company,
+          job_title: user.job_title,
+          follower_count: user.follower_count,
+          is_verified: user.is_verified,
         }))
       ];
 
@@ -186,6 +247,11 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
   const applyFilters = () => {
     let filtered = [...users];
 
+    // Profile type filter
+    if (filters.profileType) {
+      filtered = filtered.filter(user => user.profile_type === filters.profileType);
+    }
+
     // Search query filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
@@ -194,7 +260,9 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
         user.display_name?.toLowerCase().includes(query) ||
         user.bio?.toLowerCase().includes(query) ||
         user.skills?.some(skill => skill.toLowerCase().includes(query)) ||
-        user.location?.toLowerCase().includes(query)
+        user.location?.toLowerCase().includes(query) ||
+        user.company?.toLowerCase().includes(query) ||
+        user.job_title?.toLowerCase().includes(query)
       );
     }
 
@@ -229,7 +297,8 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
         user.bio?.toLowerCase().includes(filters.industry.toLowerCase()) ||
         user.skills?.some(skill => 
           skill.toLowerCase().includes(filters.industry.toLowerCase())
-        )
+        ) ||
+        user.company?.toLowerCase().includes(filters.industry.toLowerCase())
       );
     }
 
@@ -242,8 +311,14 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
   };
 
   const handleProfileClick = (user: NetworkUser) => {
-    setSelectedProfile(user);
-    setIsProfileModalOpen(true);
+    if (user.profile_type === 'external' && user.source_url) {
+      // For external profiles, open their source URL
+      window.open(user.source_url, '_blank', 'noopener,noreferrer');
+    } else {
+      // For regular users and agents, show the profile modal
+      setSelectedProfile(user);
+      setIsProfileModalOpen(true);
+    }
   };
 
   const clearFilters = () => {
@@ -253,7 +328,8 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
       timeline: '',
       industry: '',
       timeEstimate: '',
-      companyStage: ''
+      companyStage: '',
+      profileType: ''
     });
     setSearchQuery('');
   };
@@ -340,13 +416,56 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
     return colors[serviceType as keyof typeof colors] || 'bg-gray-100 text-gray-800';
   };
 
+  const getProfileTypeIcon = (profileType: string) => {
+    switch (profileType) {
+      case 'agent':
+        return <Bot size={12} className="text-purple-600" />;
+      case 'external':
+        return <ExternalLink size={12} className="text-blue-600" />;
+      case 'user':
+        return <UserCheck size={12} className="text-green-600" />;
+      default:
+        return null;
+    }
+  };
+
+  const getProfileTypeLabel = (profileType: string) => {
+    switch (profileType) {
+      case 'agent':
+        return 'AI Agent';
+      case 'external':
+        return 'External';
+      case 'user':
+        return 'Member';
+      default:
+        return '';
+    }
+  };
+
+  const getSourcePlatformIcon = (platform: string) => {
+    switch (platform) {
+      case 'github':
+        return <Github size={12} />;
+      case 'linkedin':
+        return <Linkedin size={12} />;
+      case 'twitter':
+        return <Twitter size={12} />;
+      case 'dribbble':
+      case 'behance':
+        return <Star size={12} />;
+      default:
+        return <Globe size={12} />;
+    }
+  };
+
   const activeFiltersCount = 
     (filters.serviceType ? 1 : 0) +
     (filters.deliverableFormat ? 1 : 0) +
     (filters.timeline ? 1 : 0) +
     (filters.industry ? 1 : 0) +
     (filters.timeEstimate ? 1 : 0) +
-    (filters.companyStage ? 1 : 0);
+    (filters.companyStage ? 1 : 0) +
+    (filters.profileType ? 1 : 0);
 
   return (
     <div className="min-h-screen w-full bg-amber-200">
@@ -556,6 +675,20 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
           {showFilters && (
             <div className="mt-6 pt-6 border-t border-gray-200 space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Profile Type */}
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-3">Profile Type</label>
+                  <select
+                    value={filters.profileType}
+                    onChange={(e) => setFilters(prev => ({ ...prev, profileType: e.target.value }))}
+                    className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
+                  >
+                    {profileTypes.map(type => (
+                      <option key={type.value} value={type.value}>{type.label}</option>
+                    ))}
+                  </select>
+                </div>
+
                 {/* Service Type */}
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-3">Service Type</label>
@@ -567,21 +700,6 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
                     <option value="">All service types</option>
                     {serviceTypes.map(type => (
                       <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Deliverable Format */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">Deliverable Format</label>
-                  <select
-                    value={filters.deliverableFormat}
-                    onChange={(e) => setFilters(prev => ({ ...prev, deliverableFormat: e.target.value }))}
-                    className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
-                  >
-                    <option value="">All formats</option>
-                    {deliverableFormats.map(format => (
-                      <option key={format} value={format}>{format}</option>
                     ))}
                   </select>
                 </div>
@@ -614,38 +732,6 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
                     <option value="">All industries</option>
                     {industries.map(industry => (
                       <option key={industry} value={industry}>{industry}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                {/* Time Estimate */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">Time Estimate</label>
-                  <select
-                    value={filters.timeEstimate}
-                    onChange={(e) => setFilters(prev => ({ ...prev, timeEstimate: e.target.value }))}
-                    className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
-                  >
-                    <option value="">All time estimates</option>
-                    {timeEstimates.map(estimate => (
-                      <option key={estimate} value={estimate}>{estimate}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Company Stage */}
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-3">Company Stage</label>
-                  <select
-                    value={filters.companyStage}
-                    onChange={(e) => setFilters(prev => ({ ...prev, companyStage: e.target.value }))}
-                    className="w-full p-3 border border-gray-200 rounded-xl bg-white focus:outline-none focus:ring-2 focus:ring-amber-400"
-                  >
-                    <option value="">All company stages</option>
-                    {companyStages.map(stage => (
-                      <option key={stage} value={stage}>{stage}</option>
                     ))}
                   </select>
                 </div>
@@ -696,14 +782,35 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
               >
                 {/* Avatar and Status */}
                 <div className="text-center mb-4">
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-lg font-bold ${getAvatarColor(user.full_name)} mx-auto mb-3 group-hover:scale-110 transition-transform duration-200`}>
+                  <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-lg font-bold ${getAvatarColor(user.full_name)} mx-auto mb-3 group-hover:scale-110 transition-transform duration-200 relative`}>
                     {getInitials(user.display_name)}
+                    
+                    {/* Profile type indicator */}
+                    <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center border-2 border-white">
+                      {getProfileTypeIcon(user.profile_type)}
+                    </div>
                   </div>
                   
-                  {user.is_available_for_work && (
-                    <div className="inline-flex items-center gap-1 bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
-                      <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
-                      Available
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    {user.is_available_for_work && user.profile_type !== 'external' && (
+                      <div className="inline-flex items-center gap-1 bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
+                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
+                        Available
+                      </div>
+                    )}
+                    
+                    <div className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-medium">
+                      {getProfileTypeIcon(user.profile_type)}
+                      {getProfileTypeLabel(user.profile_type)}
+                    </div>
+                  </div>
+
+                  {/* External profile source */}
+                  {user.profile_type === 'external' && user.source_platform && (
+                    <div className="flex items-center justify-center gap-1 text-xs text-gray-500 mb-2">
+                      {getSourcePlatformIcon(user.source_platform)}
+                      <span className="capitalize">{user.source_platform}</span>
+                      {user.is_verified && <Star size={10} className="text-yellow-500 fill-current" />}
                     </div>
                   )}
                 </div>
@@ -713,6 +820,14 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
                   <h3 className="font-semibold text-gray-900 mb-1 group-hover:text-blue-600 transition-colors duration-200">
                     {user.full_name}
                   </h3>
+                  
+                  {/* Job title and company for external profiles */}
+                  {user.profile_type === 'external' && (user.job_title || user.company) && (
+                    <p className="text-xs text-gray-600 mb-1">
+                      {user.job_title}{user.job_title && user.company && ' at '}{user.company}
+                    </p>
+                  )}
+                  
                   {user.location && (
                     <div className="flex items-center justify-center gap-1 text-gray-500 text-sm">
                       <MapPin size={12} />
@@ -749,29 +864,36 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
                   </div>
                 )}
 
-                {/* Time Balance */}
-                {user.time_balance_hours !== undefined && (
-                  <div className="text-center">
+                {/* Footer info */}
+                <div className="text-center">
+                  {user.profile_type === 'external' && user.follower_count ? (
+                    <div className="flex items-center justify-center gap-1 text-sm text-gray-500">
+                      <Users size={12} />
+                      <span>{user.follower_count.toLocaleString()} followers</span>
+                    </div>
+                  ) : user.time_balance_hours !== undefined ? (
                     <div className="flex items-center justify-center gap-1 text-sm">
                       <Clock size={12} />
                       <span className={`font-medium ${getTimeBalanceColor(user.time_balance_hours)}`}>
                         {user.time_balance_hours > 0 ? '+' : ''}{user.time_balance_hours}h
                       </span>
                     </div>
-                  </div>
-                )}
+                  ) : null}
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* Profile Modal */}
-      <ProfileModal
-        isOpen={isProfileModalOpen}
-        onClose={() => setIsProfileModalOpen(false)}
-        profile={selectedProfile}
-      />
+      {/* Profile Modal - only for non-external profiles */}
+      {selectedProfile && selectedProfile.profile_type !== 'external' && (
+        <ProfileModal
+          isOpen={isProfileModalOpen}
+          onClose={() => setIsProfileModalOpen(false)}
+          profile={selectedProfile}
+        />
+      )}
     </div>
   );
 };
