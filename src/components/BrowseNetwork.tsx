@@ -19,6 +19,7 @@ interface NetworkUser {
   profile_type: 'user' | 'agent' | 'external';
   source_platform?: string;
   source_url?: string;
+  profile_url?: string;
   company?: string;
   job_title?: string;
   follower_count?: number;
@@ -155,7 +156,7 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
         `)
         .limit(10);
 
-      // Load external profiles
+      // Load external profiles - now using the correct table structure
       const { data: externalUsers, error: externalError } = await supabase
         .from('external_profiles')
         .select(`
@@ -166,11 +167,13 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
           location,
           source_platform,
           source_url,
+          profile_url,
           company,
           job_title,
           follower_count,
           is_verified,
-          skills
+          skills,
+          avatar_url
         `)
         .not('name', 'is', null)
         .limit(15);
@@ -198,18 +201,20 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
           preferred_work_types: getRandomWorkTypes(),
           profile_type: 'agent' as const,
         })),
-        // External profiles
+        // External profiles - using the correct column mapping
         ...(externalUsers || []).map(user => ({
           id: user.id,
-          full_name: user.name,
-          display_name: user.display_name,
+          full_name: user.name, // external_profiles uses 'name' not 'full_name'
+          display_name: user.display_name || user.name,
           bio: user.bio,
           location: user.location,
+          avatar_url: user.avatar_url,
           is_available_for_work: true,
           skills: user.skills || getRandomSkills(),
           profile_type: 'external' as const,
           source_platform: user.source_platform,
           source_url: user.source_url,
+          profile_url: user.profile_url || user.source_url, // fallback to source_url
           company: user.company,
           job_title: user.job_title,
           follower_count: user.follower_count,
@@ -311,9 +316,12 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
   };
 
   const handleProfileClick = (user: NetworkUser) => {
-    if (user.profile_type === 'external' && user.source_url) {
-      // For external profiles, open their source URL
-      window.open(user.source_url, '_blank', 'noopener,noreferrer');
+    if (user.profile_type === 'external') {
+      // For external profiles, open their profile URL (or source URL as fallback)
+      const urlToOpen = user.profile_url || user.source_url;
+      if (urlToOpen) {
+        window.open(urlToOpen, '_blank', 'noopener,noreferrer');
+      }
     } else {
       // For regular users and agents, show the profile modal
       setSelectedProfile(user);
@@ -442,8 +450,10 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
     }
   };
 
-  const getSourcePlatformIcon = (platform: string) => {
-    switch (platform) {
+  const getSourcePlatformIcon = (platform?: string) => {
+    if (!platform) return <Globe size={12} />;
+    
+    switch (platform.toLowerCase()) {
       case 'github':
         return <Github size={12} />;
       case 'linkedin':
