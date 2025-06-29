@@ -801,14 +801,6 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
                       {getProfileTypeLabel(user.profile_type)}
                     </div>
                   </div>
-
-                  {/* External profile source - removed platform display */}
-                  {user.profile_type === 'external' && (
-                    <div className="flex items-center justify-center gap-1 text-xs text-gray-500 mb-2">
-                      {getSourcePlatformIcon(user.platform)}
-                      <span className="capitalize">{user.platform}</span>
-                    </div>
-                  )}
                 </div>
 
                 {/* Name and Location */}

@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, MessageCircle, MapPin, ExternalLink, Github, Linkedin, Twitter, Globe } from 'lucide-react';
+import { X, MessageCircle, MapPin, ExternalLink, Github, Linkedin, Twitter, Globe, Bot } from 'lucide-react';
 
 interface ProfileData {
   id: string;
@@ -9,12 +9,14 @@ interface ProfileData {
   location?: string;
   avatar_url?: string;
   is_available_for_work?: boolean;
-  expertise?: string[];
-  tools?: string[];
+  expertise_tags?: string[];
+  tools_tags?: string[];
+  skills?: string[];
   urls?: Array<{
     url: string;
     url_type: string;
   }>;
+  profile_type?: 'user' | 'agent' | 'external';
 }
 
 interface ProfileModalProps {
@@ -48,20 +50,39 @@ const ProfileModal = ({ isOpen, onClose, profile }: ProfileModalProps) => {
     }
   };
 
-  // Mock data for demonstration - in a real app, this would come from the database
-  const mockProfileData = {
-    expertise: ['UI/UX Specialist', 'Creative Director', 'Product Strategist'],
-    tools: ['Subframe Platform', 'Adobe XD', 'Vue.js'],
-    bio: 'Co-founder at Subframe. Seasoned designer and strategic advisor driving innovation for start-ups and high-growth companies.',
-    urls: [
-      { url: 'https://subframe.com', url_type: 'website' },
-      { url: 'https://linkedin.com/in/jamesburton', url_type: 'linkedin' },
-      { url: 'https://twitter.com/jamesburton', url_type: 'twitter' },
-      { url: 'https://github.com/jamesburton', url_type: 'github' }
-    ]
+  const getStatusIcon = () => {
+    if (profile.profile_type === 'agent') {
+      return <Bot size={16} className="text-purple-600" />;
+    }
+    return null;
   };
 
-  const displayProfile = { ...profile, ...mockProfileData };
+  const getStatusLabel = () => {
+    if (profile.profile_type === 'agent') {
+      return 'AI Agent';
+    }
+    if (profile.is_available_for_work !== false) {
+      return 'Member';
+    }
+    return 'Member';
+  };
+
+  // Combine all skills/tags for display
+  const allSkills = [
+    ...(profile.skills || []),
+    ...(profile.expertise_tags || []),
+    ...(profile.tools_tags || [])
+  ].filter((skill, index, array) => array.indexOf(skill) === index); // Remove duplicates
+
+  // Mock URLs for demonstration - in a real app, this would come from profile_urls table
+  const mockUrls = [
+    { url: 'https://subframe.com', url_type: 'website' },
+    { url: 'https://linkedin.com/in/profile', url_type: 'linkedin' },
+    { url: 'https://twitter.com/profile', url_type: 'twitter' },
+    { url: 'https://github.com/profile', url_type: 'github' }
+  ];
+
+  const displayUrls = profile.urls || mockUrls;
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
@@ -87,12 +108,10 @@ const ProfileModal = ({ isOpen, onClose, profile }: ProfileModalProps) => {
               {getInitials(profile.display_name)}
             </div>
             
-            {profile.is_available_for_work !== false && (
-              <div className="inline-flex items-center gap-2 bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-medium mb-4">
-                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                Available
-              </div>
-            )}
+            <div className="inline-flex items-center gap-2 bg-gray-100 text-gray-600 px-3 py-1 rounded-full text-sm font-medium mb-4">
+              {getStatusIcon()}
+              {getStatusLabel()}
+            </div>
 
             <h2 className="text-2xl font-bold text-gray-900 mb-4">{profile.full_name}</h2>
 
@@ -107,20 +126,15 @@ const ProfileModal = ({ isOpen, onClose, profile }: ProfileModalProps) => {
         {/* Content */}
         <div className="px-6 pb-6 space-y-6">
           {/* Expertise & Tools */}
-          {displayProfile.expertise && displayProfile.expertise.length > 0 && (
+          {allSkills.length > 0 && (
             <div>
               <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
                 Expertise & Tools
               </h3>
               <div className="space-y-2">
-                {displayProfile.expertise.map((skill, index) => (
+                {allSkills.map((skill, index) => (
                   <div key={index} className="inline-block bg-gray-100 text-gray-700 px-3 py-1 rounded-lg text-sm font-medium mr-2 mb-2">
                     {skill}
-                  </div>
-                ))}
-                {displayProfile.tools && displayProfile.tools.map((tool, index) => (
-                  <div key={`tool-${index}`} className="inline-block bg-gray-100 text-gray-700 px-3 py-1 rounded-lg text-sm font-medium mr-2 mb-2">
-                    {tool}
                   </div>
                 ))}
               </div>
@@ -128,13 +142,13 @@ const ProfileModal = ({ isOpen, onClose, profile }: ProfileModalProps) => {
           )}
 
           {/* Profile Summary */}
-          {displayProfile.bio && (
+          {profile.bio && (
             <div>
               <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
                 Profile Summary
               </h3>
               <p className="text-gray-700 leading-relaxed">
-                {displayProfile.bio}
+                {profile.bio}
               </p>
             </div>
           )}
@@ -148,13 +162,13 @@ const ProfileModal = ({ isOpen, onClose, profile }: ProfileModalProps) => {
           )}
 
           {/* Links */}
-          {displayProfile.urls && displayProfile.urls.length > 0 && (
+          {displayUrls.length > 0 && (
             <div>
               <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wide mb-3">
                 Links
               </h3>
               <div className="flex gap-3">
-                {displayProfile.urls.map((link, index) => (
+                {displayUrls.map((link, index) => (
                   <a
                     key={index}
                     href={link.url}
