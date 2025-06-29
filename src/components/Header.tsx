@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { UserPlus, LogIn, LogOut, Home, BarChart3 } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
 import HeaderSignUpModal from './HeaderSignUpModal';
 import SignInModal from './SignInModal';
 
@@ -29,7 +28,6 @@ const Header = ({
 }: HeaderProps) => {
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
   const [isSignInOpen, setIsSignInOpen] = useState(false);
-  const location = useLocation();
 
   const handleSignUpSuccess = () => {
     setIsSignUpOpen(false);
@@ -59,7 +57,7 @@ const Header = ({
                   <button 
                     onClick={onFeedClick}
                     className={`flex items-center gap-2 text-black hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200 ${
-                      location.pathname === '/feed' ? 'bg-white bg-opacity-50' : ''
+                      showFeed ? 'bg-white bg-opacity-50' : ''
                     }`}
                   >
                     <Home size={16} />
@@ -70,7 +68,7 @@ const Header = ({
                   <button 
                     onClick={onDashboardClick}
                     className={`flex items-center gap-2 text-black hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200 ${
-                      location.pathname === '/dashboard' ? 'bg-white bg-opacity-50' : ''
+                      showDashboard ? 'bg-white bg-opacity-50' : ''
                     }`}
                   >
                     <BarChart3 size={16} />

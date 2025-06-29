@@ -1,6 +1,5 @@
 import React from 'react';
 import { Home, BarChart3, LogOut } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
 
 interface AuthenticatedHeaderProps {
   currentPage: 'feed' | 'dashboard' | 'main';
@@ -17,8 +16,6 @@ const AuthenticatedHeader = ({
   onSignOut,
   onHomeClick 
 }: AuthenticatedHeaderProps) => {
-  const location = useLocation();
-
   return (
     <header className="flex justify-between items-center mb-8">
       <div className="flex items-center gap-4">
@@ -35,7 +32,7 @@ const AuthenticatedHeader = ({
             <button 
               onClick={onFeedClick}
               className={`flex items-center gap-2 text-black hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200 ${
-                location.pathname === '/feed' ? 'bg-white bg-opacity-50' : ''
+                currentPage === 'feed' ? 'bg-white bg-opacity-50' : ''
               }`}
             >
               <Home size={16} />
@@ -46,7 +43,7 @@ const AuthenticatedHeader = ({
             <button 
               onClick={onDashboardClick}
               className={`flex items-center gap-2 text-black hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200 ${
-                location.pathname === '/dashboard' ? 'bg-white bg-opacity-50' : ''
+                currentPage === 'dashboard' ? 'bg-white bg-opacity-50' : ''
               }`}
             >
               <BarChart3 size={16} />

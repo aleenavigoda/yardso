@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom';
 import Header from './components/Header';
 import Hero from './components/Hero';
 import SearchForm from './components/SearchForm';
@@ -24,23 +23,13 @@ interface SearchParams {
   companyStage: string;
 }
 
-// Main App component that handles routing
 function App() {
-  return (
-    <Router>
-      <AppContent />
-    </Router>
-  );
-}
-
-// App content component that uses router hooks
-function AppContent() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  
   const [searchValue, setSearchValue] = useState('');
   const [isTimeLoggingOpen, setIsTimeLoggingOpen] = useState(false);
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
+  const [showDashboard, setShowDashboard] = useState(false);
+  const [showFeed, setShowFeed] = useState(false);
+  const [showBrowseNetwork, setShowBrowseNetwork] = useState(false);
   const [browseNetworkParams, setBrowseNetworkParams] = useState<SearchParams | undefined>();
   const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | undefined>();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
@@ -210,7 +199,7 @@ function AppContent() {
             }
             
             // AUTOMATICALLY REDIRECT TO DASHBOARD
-            navigate('/dashboard');
+            setShowDashboard(true);
             return; // Exit early with cached data
           }
         } catch (e) {
@@ -277,7 +266,7 @@ function AppContent() {
       }
       
       // AUTOMATICALLY REDIRECT TO DASHBOARD
-      navigate('/dashboard');
+      setShowDashboard(true);
       
       console.log('Auth success completed successfully');
     } catch (error: any) {
@@ -296,18 +285,20 @@ function AppContent() {
       setIsAuthenticated(true);
       
       // AUTOMATICALLY REDIRECT TO DASHBOARD EVEN ON ERROR
-      navigate('/dashboard');
+      setShowDashboard(true);
     }
   };
 
   const clearAuthState = () => {
     localStorage.removeItem('userProfile');
     localStorage.removeItem('pendingTimeLog');
+    setShowDashboard(false);
+    setShowFeed(false);
+    setShowBrowseNetwork(false);
     setBrowseNetworkParams(undefined);
     setPendingTimeLog(undefined);
     setIsAuthenticated(false);
     setUserProfile(null);
-    navigate('/');
   };
 
   // Simplified auth initialization with shorter timeout and better error handling
@@ -457,24 +448,54 @@ function AppContent() {
   const handleSignUpSuccess = () => {
     setIsSignUpOpen(false);
     setPendingTimeLog(undefined);
-    navigate('/dashboard');
+    setShowDashboard(true);
   };
 
   const handleSignUpClose = () => {
     setIsSignUpOpen(false);
   };
 
+  const handleBackToHome = () => {
+    setShowDashboard(false);
+    setShowFeed(false);
+    setShowBrowseNetwork(false);
+    setBrowseNetworkParams(undefined);
+  };
+
   const handleHeaderSignUpSuccess = () => {
-    navigate('/dashboard');
+    setShowDashboard(true);
   };
 
   const handleHeaderSignInSuccess = () => {
-    navigate('/dashboard');
+    setShowDashboard(true);
+  };
+
+  const handleDashboardClick = () => {
+    setShowDashboard(true);
+    setShowFeed(false);
+    setShowBrowseNetwork(false);
+    setBrowseNetworkParams(undefined);
+  };
+
+  const handleFeedClick = () => {
+    setShowFeed(true);
+    setShowDashboard(false);
+    setShowBrowseNetwork(false);
+    setBrowseNetworkParams(undefined);
+  };
+
+  const handleBrowseNetworkClick = () => {
+    setShowBrowseNetwork(true);
+    setShowDashboard(false);
+    setShowFeed(false);
+    setBrowseNetworkParams(undefined);
   };
 
   const handleSubmitRequest = (searchParams: SearchParams) => {
     setBrowseNetworkParams(searchParams);
-    navigate('/browse');
+    setShowBrowseNetwork(true);
+    setShowDashboard(false);
+    setShowFeed(false);
   };
 
   const handleSignOut = async () => {
@@ -501,96 +522,86 @@ function AppContent() {
     );
   }
 
+  // Show browse network if user wants to see it
+  if (showBrowseNetwork) {
+    return (
+      <BrowseNetwork 
+        onBack={handleBackToHome}
+        onFeedClick={handleFeedClick}
+        onDashboardClick={handleDashboardClick}
+        onSignOut={handleSignOut}
+        searchParams={browseNetworkParams}
+      />
+    );
+  }
+
+  // Show feed if user is authenticated and wants to see it
+  if (showFeed && isAuthenticated) {
+    return (
+      <Feed 
+        onBack={handleBackToHome} 
+        onDashboardClick={handleDashboardClick}
+        onSignOut={handleSignOut}
+      />
+    );
+  }
+
+  // Show dashboard if user is authenticated and wants to see it
+  if (showDashboard && isAuthenticated) {
+    return (
+      <Dashboard 
+        onBack={handleBackToHome} 
+        onFeedClick={handleFeedClick}
+        onBrowseNetworkClick={handleBrowseNetworkClick}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen w-full bg-amber-200">
-      <Routes>
-        {/* Home page */}
-        <Route path="/" element={
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-            <Header 
-              isAuthenticated={isAuthenticated}
-              userProfile={userProfile}
-              showDashboard={location.pathname === '/dashboard'}
-              showFeed={location.pathname === '/feed'}
-              onSignUpSuccess={handleHeaderSignUpSuccess}
-              onSignInSuccess={handleHeaderSignInSuccess}
-              onDashboardClick={() => navigate('/dashboard')}
-              onFeedClick={() => navigate('/feed')}
-              onSignOut={handleSignOut}
-            />
-            <main className="mt-16 md:mt-24">
-              {/* Only show Hero section if not authenticated */}
-              {!isAuthenticated && <Hero />}
-              
-              {/* Show time logging banner for both authenticated and non-authenticated users */}
-              <TimeLoggingBanner onLogTime={() => setIsTimeLoggingOpen(true)} />
-              
-              <SearchForm
-                searchValue={searchValue}
-                setSearchValue={setSearchValue}
-                onSubmitRequest={handleSubmitRequest}
-              />
-              <ExampleQueries setSearchValue={setSearchValue} />
-            </main>
-            <Footer />
-            
-            <TimeLoggingModal
-              isOpen={isTimeLoggingOpen}
-              onClose={() => setIsTimeLoggingOpen(false)}
-              onSignUp={handleTimeLoggingSignUp}
-              onLogTime={handleTimeLoggingDirect}
-              isAuthenticated={isAuthenticated}
-            />
-            
-            <SignUpModal
-              isOpen={isSignUpOpen}
-              onClose={handleSignUpClose}
-              timeLoggingData={pendingTimeLog}
-              onSignUpSuccess={handleSignUpSuccess}
-            />
-          </div>
-        } />
-
-        {/* Dashboard route */}
-        <Route path="/dashboard" element={
-          isAuthenticated ? (
-            <Dashboard 
-              onBack={() => navigate('/')} 
-              onFeedClick={() => navigate('/feed')}
-              onBrowseNetworkClick={() => navigate('/browse')}
-            />
-          ) : (
-            <Navigate to="/" replace />
-          )
-        } />
-
-        {/* Feed route */}
-        <Route path="/feed" element={
-          isAuthenticated ? (
-            <Feed 
-              onBack={() => navigate('/')} 
-              onDashboardClick={() => navigate('/dashboard')}
-              onSignOut={handleSignOut}
-            />
-          ) : (
-            <Navigate to="/" replace />
-          )
-        } />
-
-        {/* Browse Network route */}
-        <Route path="/browse" element={
-          <BrowseNetwork 
-            onBack={() => navigate('/')}
-            onFeedClick={() => navigate('/feed')}
-            onDashboardClick={() => navigate('/dashboard')}
-            onSignOut={handleSignOut}
-            searchParams={browseNetworkParams}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+        <Header 
+          isAuthenticated={isAuthenticated}
+          userProfile={userProfile}
+          showDashboard={showDashboard}
+          showFeed={showFeed}
+          onSignUpSuccess={handleHeaderSignUpSuccess}
+          onSignInSuccess={handleHeaderSignInSuccess}
+          onDashboardClick={handleDashboardClick}
+          onFeedClick={handleFeedClick}
+          onSignOut={handleSignOut}
+        />
+        <main className="mt-16 md:mt-24">
+          {/* Only show Hero section if not authenticated */}
+          {!isAuthenticated && <Hero />}
+          
+          {/* Show time logging banner for both authenticated and non-authenticated users */}
+          <TimeLoggingBanner onLogTime={() => setIsTimeLoggingOpen(true)} />
+          
+          <SearchForm
+            searchValue={searchValue}
+            setSearchValue={setSearchValue}
+            onSubmitRequest={handleSubmitRequest}
           />
-        } />
-
-        {/* Catch all route - redirect to home */}
-        <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
+          <ExampleQueries setSearchValue={setSearchValue} />
+        </main>
+        <Footer />
+      </div>
+      
+      <TimeLoggingModal
+        isOpen={isTimeLoggingOpen}
+        onClose={() => setIsTimeLoggingOpen(false)}
+        onSignUp={handleTimeLoggingSignUp}
+        onLogTime={handleTimeLoggingDirect}
+        isAuthenticated={isAuthenticated}
+      />
+      
+      <SignUpModal
+        isOpen={isSignUpOpen}
+        onClose={handleSignUpClose}
+        timeLoggingData={pendingTimeLog}
+        onSignUpSuccess={handleSignUpSuccess}
+      />
     </div>
   );
 }
