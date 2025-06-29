@@ -128,7 +128,9 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
     try {
       setIsLoading(true);
       
-      // Load regular users
+      console.log('Starting to load users...');
+      
+      // Load regular users (non-agents from profiles table)
       const { data: regularUsers, error: regularError } = await supabase
         .from('profiles')
         .select(`
@@ -141,12 +143,15 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
           is_available_for_work,
           time_balance_hours,
           hourly_rate_range,
-          preferred_work_types
+          preferred_work_types,
+          is_agent
         `)
         .eq('is_agent', false)
         .limit(20);
 
-      // Load agent profiles
+      console.log('Regular users loaded:', regularUsers?.length || 0, regularError);
+
+      // Load agent profiles from agent_profiles table
       const { data: agentUsers, error: agentError } = await supabase
         .from('agent_profiles')
         .select(`
@@ -158,6 +163,8 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
           time_balance_hours
         `)
         .limit(10);
+
+      console.log('Agent users loaded:', agentUsers?.length || 0, agentError);
 
       // Load external profiles using the correct structure from your screenshot
       const { data: externalUsers, error: externalError } = await supabase
@@ -176,15 +183,11 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
         .not('name', 'is', null)
         .limit(15);
 
+      console.log('External users loaded:', externalUsers?.length || 0, externalError);
+
       if (regularError) console.error('Error loading regular users:', regularError);
       if (agentError) console.error('Error loading agent users:', agentError);
       if (externalError) console.error('Error loading external users:', externalError);
-
-      console.log('Loaded data:', {
-        regularUsers: regularUsers?.length || 0,
-        agentUsers: agentUsers?.length || 0,
-        externalUsers: externalUsers?.length || 0
-      });
 
       // Combine and format users
       const allUsers: NetworkUser[] = [
@@ -196,7 +199,7 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
           skills: getRandomSkills(),
           profile_type: 'user' as const,
         })),
-        // Agent profiles
+        // Agent profiles - FIXED: These should show up now
         ...(agentUsers || []).map(user => ({
           ...user,
           full_name: user.full_name || user.display_name,
@@ -224,6 +227,12 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
       ];
 
       console.log('All users combined:', allUsers.length);
+      console.log('User breakdown:', {
+        regular: regularUsers?.length || 0,
+        agents: agentUsers?.length || 0,
+        external: externalUsers?.length || 0
+      });
+      
       setUsers(allUsers);
     } catch (error) {
       console.error('Error loading users:', error);
@@ -852,13 +861,16 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
                   </div>
                 )}
 
-                {/* Footer info - Updated based on your feedback */}
+                {/* Footer info - REMOVED "Message" section for external_profiles */}
                 <div className="text-center">
                   {user.profile_type === 'external' ? (
-                    <div className="flex items-center justify-center gap-1 text-sm text-blue-600 font-medium">
-                      <MessageCircle size={12} />
-                      <span>Message</span>
-                    </div>
+                    // For external profiles, just show the platform or nothing
+                    user.platform && (
+                      <div className="flex items-center justify-center gap-1 text-sm text-gray-500">
+                        {getSourcePlatformIcon(user.platform)}
+                        <span className="capitalize">{user.platform}</span>
+                      </div>
+                    )
                   ) : (
                     <div className="flex items-center justify-center gap-1 text-sm text-blue-600 font-medium">
                       <MessageCircle size={12} />
