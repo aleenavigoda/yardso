@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, MapPin, Clock, Star, Users, ChevronDown, X, DollarSign, Calendar, Target, CheckCircle, ExternalLink, Github, Linkedin, Twitter, Globe, Bot, UserCheck } from 'lucide-react';
+import { Search, Filter, MapPin, Users, ChevronDown, X, DollarSign, Calendar, Target, CheckCircle, ExternalLink, Github, Linkedin, Twitter, Globe, Bot, UserCheck, MessageCircle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import AuthenticatedHeader from './AuthenticatedHeader';
 import ProfileModal from './ProfileModal';
@@ -407,12 +407,6 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
     return colors[index % colors.length];
   };
 
-  const getTimeBalanceColor = (balance: number) => {
-    if (balance > 0) return 'text-green-600';
-    if (balance < 0) return 'text-red-600';
-    return 'text-gray-600';
-  };
-
   const getServiceTypeColor = (serviceType: string) => {
     const colors = {
       'Legal Review': 'bg-green-100 text-green-800',
@@ -462,7 +456,7 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
         return <Twitter size={12} />;
       case 'dribbble':
       case 'behance':
-        return <Star size={12} />;
+        return <Globe size={12} />;
       default:
         return <Globe size={12} />;
     }
@@ -533,7 +527,7 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
               {searchParams.timeEstimate && (
                 <div className="flex items-center gap-2 text-sm text-gray-600">
-                  <Clock size={14} className="flex-shrink-0" />
+                  <Target size={14} className="flex-shrink-0" />
                   <span className="truncate">{searchParams.timeEstimate}</span>
                 </div>
               )}
@@ -591,7 +585,7 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
                   >
                     {isSubmittingBounty ? (
                       <>
-                        <Clock size={16} className="animate-spin" />
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
                         Submitting...
                       </>
                     ) : (
@@ -802,21 +796,14 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
                   </div>
                   
                   <div className="flex items-center justify-center gap-2 mb-2">
-                    {user.is_available_for_work && user.profile_type !== 'external' && (
-                      <div className="inline-flex items-center gap-1 bg-green-100 text-green-800 px-2 py-1 rounded-full text-xs font-medium">
-                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full"></div>
-                        Available
-                      </div>
-                    )}
-                    
                     <div className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-medium">
                       {getProfileTypeIcon(user.profile_type)}
                       {getProfileTypeLabel(user.profile_type)}
                     </div>
                   </div>
 
-                  {/* External profile source */}
-                  {user.profile_type === 'external' && user.platform && (
+                  {/* External profile source - removed platform display */}
+                  {user.profile_type === 'external' && (
                     <div className="flex items-center justify-center gap-1 text-xs text-gray-500 mb-2">
                       {getSourcePlatformIcon(user.platform)}
                       <span className="capitalize">{user.platform}</span>
@@ -869,18 +856,16 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
                 {/* Footer info */}
                 <div className="text-center">
                   {user.profile_type === 'external' ? (
-                    <div className="flex items-center justify-center gap-1 text-sm text-gray-500">
-                      <ExternalLink size={12} />
-                      <span>View Profile</span>
+                    <div className="flex items-center justify-center gap-1 text-sm text-blue-600 font-medium">
+                      <MessageCircle size={12} />
+                      <span>Message</span>
                     </div>
-                  ) : user.time_balance_hours !== undefined ? (
-                    <div className="flex items-center justify-center gap-1 text-sm">
-                      <Clock size={12} />
-                      <span className={`font-medium ${getTimeBalanceColor(user.time_balance_hours)}`}>
-                        {user.time_balance_hours > 0 ? '+' : ''}{user.time_balance_hours}h
-                      </span>
+                  ) : (
+                    <div className="flex items-center justify-center gap-1 text-sm text-blue-600 font-medium">
+                      <MessageCircle size={12} />
+                      <span>Connect</span>
                     </div>
-                  ) : null}
+                  )}
                 </div>
               </div>
             ))}
