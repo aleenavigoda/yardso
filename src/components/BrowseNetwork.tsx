@@ -152,7 +152,7 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
       console.log('👥 Regular users loaded:', regularUsers?.length || 0);
       if (regularError) console.error('❌ Regular users error:', regularError);
 
-      // Load agent profiles from agent_profiles table - THIS IS THE KEY FIX
+      // Load agent profiles from agent_profiles table - FIXED: Remove location column
       const { data: agentUsers, error: agentError } = await supabase
         .from('agent_profiles')
         .select(`
@@ -160,7 +160,6 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
           full_name,
           display_name,
           bio,
-          location,
           time_balance_hours
         `)
         .limit(10);
@@ -205,12 +204,13 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
         console.log('✅ Added regular users:', formattedRegularUsers.length);
       }
 
-      // Add agent profiles - FIXED: Ensure these are properly added
+      // Add agent profiles - FIXED: Add mock location since column doesn't exist
       if (agentUsers && agentUsers.length > 0) {
         const formattedAgentUsers = agentUsers.map(user => ({
           ...user,
           full_name: user.full_name || user.display_name || 'AI Agent',
           display_name: user.display_name || user.full_name || 'Agent',
+          location: 'Virtual', // Mock location since column doesn't exist
           is_available_for_work: true,
           skills: getRandomSkills(),
           preferred_work_types: getRandomWorkTypes(),
