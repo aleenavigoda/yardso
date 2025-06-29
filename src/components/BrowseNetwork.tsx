@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, MapPin, Users, ChevronDown, X, DollarSign, Calendar, Target, CheckCircle, ExternalLink, Github, Linkedin, Twitter, Globe, Bot, UserCheck, MessageCircle } from 'lucide-react';
+import { Search, Filter, MapPin, Users, ChevronDown, X, DollarSign, Calendar, Target, CheckCircle, ExternalLink, Github, Linkedin, Twitter, Globe, Bot, UserCheck, MessageCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import AuthenticatedHeader from './AuthenticatedHeader';
 import ProfileModal from './ProfileModal';
@@ -62,6 +62,7 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
   const [filteredUsers, setFilteredUsers] = useState<NetworkUser[]>([]);
   const [searchQuery, setSearchQuery] = useState(searchParams?.query || '');
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState<NetworkUser | null>(null);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
@@ -71,6 +72,12 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
   const [bountyData, setBountyData] = useState({
     budget: '',
     description: ''
+  });
+  const [pagination, setPagination] = useState({
+    page: 0,
+    pageSize: 20,
+    hasMore: true,
+    totalCount: 0
   });
   
   const [filters, setFilters] = useState<FilterState>({
@@ -117,21 +124,29 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
   ];
 
   useEffect(() => {
-    loadUsers();
+    loadUsers(true); // Reset pagination on initial load
   }, []);
 
   useEffect(() => {
     applyFilters();
   }, [users, searchQuery, filters]);
 
-  const loadUsers = async () => {
+  const loadUsers = async (reset = false) => {
     try {
-      setIsLoading(true);
+      if (reset) {
+        setIsLoading(true);
+        setPagination(prev => ({ ...prev, page: 0, hasMore: true }));
+      } else {
+        setIsLoadingMore(true);
+      }
       
-      console.log('🔄 Starting to load users...');
+      const currentPage = reset ? 0 : pagination.page;
+      const offset = currentPage * pagination.pageSize;
+      
+      console.log(`🔄 Loading users - Page: ${currentPage}, Offset: ${offset}, PageSize: ${pagination.pageSize}`);
       
       // Load regular users (non-agents from profiles table)
-      const { data: regularUsers, error: regularError } = await supabase
+      const { data: regularUsers, error: regularError, count: regularCount } = await supabase
         .from('profiles')
         .select(`
           id,
@@ -145,15 +160,15 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
           hourly_rate_range,
           preferred_work_types,
           is_agent
-        `)
+        `, { count: 'exact' })
         .eq('is_agent', false)
-        .limit(20);
+        .range(offset, offset + pagination.pageSize - 1);
 
-      console.log('👥 Regular users loaded:', regularUsers?.length || 0);
+      console.log('👥 Regular users loaded:', regularUsers?.length || 0, 'Total count:', regularCount);
       if (regularError) console.error('❌ Regular users error:', regularError);
 
-      // Load agent profiles from agent_profiles table - FIXED: Remove location column
-      const { data: agentUsers, error: agentError } = await supabase
+      // Load agent profiles from agent_profiles table
+      const { data: agentUsers, error: agentError, count: agentCount } = await supabase
         .from('agent_profiles')
         .select(`
           id,
@@ -161,14 +176,14 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
           display_name,
           bio,
           time_balance_hours
-        `)
-        .limit(10);
+        `, { count: 'exact' })
+        .range(offset, offset + pagination.pageSize - 1);
 
-      console.log('🤖 Agent users loaded:', agentUsers?.length || 0);
+      console.log('🤖 Agent users loaded:', agentUsers?.length || 0, 'Total count:', agentCount);
       if (agentError) console.error('❌ Agent users error:', agentError);
 
-      // Load external profiles using the correct structure from your screenshot
-      const { data: externalUsers, error: externalError } = await supabase
+      // Load external profiles using the correct structure
+      const { data: externalUsers, error: externalError, count: externalCount } = await supabase
         .from('external_profiles')
         .select(`
           id,
@@ -180,15 +195,15 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
           tools_tags,
           platform,
           profile_url
-        `)
+        `, { count: 'exact' })
         .not('name', 'is', null)
-        .limit(15);
+        .range(offset, offset + pagination.pageSize - 1);
 
-      console.log('🌐 External users loaded:', externalUsers?.length || 0);
+      console.log('🌐 External users loaded:', externalUsers?.length || 0, 'Total count:', externalCount);
       if (externalError) console.error('❌ External users error:', externalError);
 
       // Combine and format users
-      const allUsers: NetworkUser[] = [];
+      const newUsers: NetworkUser[] = [];
 
       // Add regular users
       if (regularUsers) {
@@ -200,11 +215,11 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
           skills: getRandomSkills(),
           profile_type: 'user' as const,
         }));
-        allUsers.push(...formattedRegularUsers);
+        newUsers.push(...formattedRegularUsers);
         console.log('✅ Added regular users:', formattedRegularUsers.length);
       }
 
-      // Add agent profiles - FIXED: Add mock location since column doesn't exist
+      // Add agent profiles
       if (agentUsers && agentUsers.length > 0) {
         const formattedAgentUsers = agentUsers.map(user => ({
           ...user,
@@ -216,50 +231,70 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
           preferred_work_types: getRandomWorkTypes(),
           profile_type: 'agent' as const,
         }));
-        allUsers.push(...formattedAgentUsers);
+        newUsers.push(...formattedAgentUsers);
         console.log('✅ Added agent users:', formattedAgentUsers.length);
       } else {
         console.log('⚠️ No agent users found in database');
       }
 
-      // Add external profiles - using your actual table structure
+      // Add external profiles
       if (externalUsers) {
         const formattedExternalUsers = externalUsers.map(user => ({
           id: user.id,
-          full_name: user.name || 'External User', // Using 'name' from your table
-          display_name: user.name || 'External', // Using 'name' as display name too
-          bio: user.profile_summary, // Using 'profile_summary' as bio
+          full_name: user.name || 'External User',
+          display_name: user.name || 'External',
+          bio: user.profile_summary,
           location: user.location,
           avatar_url: user.avatar_url,
           is_available_for_work: true,
-          skills: [...(user.expertise_tags || []), ...(user.tools_tags || [])], // Combining both tag arrays
+          skills: [...(user.expertise_tags || []), ...(user.tools_tags || [])],
           profile_type: 'external' as const,
-          platform: user.platform, // The platform field from your table
-          profile_url: user.profile_url, // The profile_url field
+          platform: user.platform,
+          profile_url: user.profile_url,
           expertise_tags: user.expertise_tags,
           tools_tags: user.tools_tags,
         }));
-        allUsers.push(...formattedExternalUsers);
+        newUsers.push(...formattedExternalUsers);
         console.log('✅ Added external users:', formattedExternalUsers.length);
       }
 
-      console.log('📊 Final user breakdown:', {
-        regular: regularUsers?.length || 0,
-        agents: agentUsers?.length || 0,
-        external: externalUsers?.length || 0,
-        total: allUsers.length
+      // Calculate total count and pagination info
+      const totalCount = (regularCount || 0) + (agentCount || 0) + (externalCount || 0);
+      const hasMore = (offset + pagination.pageSize) < totalCount;
+
+      console.log('📊 Pagination info:', {
+        currentPage,
+        offset,
+        pageSize: pagination.pageSize,
+        newUsersLoaded: newUsers.length,
+        totalCount,
+        hasMore
       });
 
-      // Log agent users specifically for debugging
-      const agentUsersInFinal = allUsers.filter(u => u.profile_type === 'agent');
-      console.log('🤖 Agent users in final array:', agentUsersInFinal.length);
-      console.log('🤖 Agent user details:', agentUsersInFinal.map(u => ({ id: u.id, name: u.full_name, type: u.profile_type })));
-      
-      setUsers(allUsers);
+      if (reset) {
+        setUsers(newUsers);
+      } else {
+        setUsers(prev => [...prev, ...newUsers]);
+      }
+
+      setPagination(prev => ({
+        ...prev,
+        page: currentPage + 1,
+        hasMore,
+        totalCount
+      }));
+
     } catch (error) {
       console.error('💥 Error loading users:', error);
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
+    }
+  };
+
+  const loadMoreUsers = () => {
+    if (!isLoadingMore && pagination.hasMore) {
+      loadUsers(false);
     }
   };
 
@@ -807,6 +842,11 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
                 ({filteredUsers.filter(u => u.profile_type === 'user').length} members, {filteredUsers.filter(u => u.profile_type === 'agent').length} AI agents, {filteredUsers.filter(u => u.profile_type === 'external').length} external)
               </span>
             )}
+            {pagination.totalCount > 0 && (
+              <span className="text-gray-500 text-sm ml-2">
+                • Total: {pagination.totalCount} in database
+              </span>
+            )}
           </p>
         </div>
 
@@ -836,94 +876,115 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {filteredUsers.map(user => (
-              <div
-                key={user.id}
-                onClick={() => handleProfileClick(user)}
-                className="bg-white rounded-2xl p-6 shadow-sm border border-amber-100 hover:shadow-md hover:border-amber-200 transition-all duration-200 cursor-pointer group"
-              >
-                {/* Avatar and Status */}
-                <div className="text-center mb-4">
-                  <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-lg font-bold ${getAvatarColor(user.full_name)} mx-auto mb-3 group-hover:scale-110 transition-transform duration-200 relative`}>
-                    {getInitials(user.display_name)}
-                    
-                    {/* Profile type indicator */}
-                    <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center border-2 border-white">
-                      {getProfileTypeIcon(user.profile_type)}
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <div className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-medium">
-                      {getProfileTypeIcon(user.profile_type)}
-                      {getProfileTypeLabel(user.profile_type)}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Name and Location */}
-                <div className="text-center mb-4">
-                  <h3 className="font-semibold text-gray-900 mb-1 group-hover:text-blue-600 transition-colors duration-200">
-                    {user.full_name}
-                  </h3>
-                  
-                  {user.location && (
-                    <div className="flex items-center justify-center gap-1 text-gray-500 text-sm">
-                      <MapPin size={12} />
-                      <span className="truncate">{user.location}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Bio */}
-                {user.bio && (
-                  <p className="text-gray-600 text-sm text-center mb-4 line-clamp-2">
-                    {user.bio}
-                  </p>
-                )}
-
-                {/* Skills */}
-                {user.skills && user.skills.length > 0 && (
-                  <div className="mb-4">
-                    <div className="flex flex-wrap gap-1 justify-center">
-                      {user.skills.slice(0, 3).map((skill, index) => (
-                        <span
-                          key={index}
-                          className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-medium"
-                        >
-                          {skill}
-                        </span>
-                      ))}
-                      {user.skills.length > 3 && (
-                        <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-medium">
-                          +{user.skills.length - 3}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Footer info - REMOVED "Message" section for external_profiles */}
-                <div className="text-center">
-                  {user.profile_type === 'external' ? (
-                    // For external profiles, just show the platform or nothing
-                    user.platform && (
-                      <div className="flex items-center justify-center gap-1 text-sm text-gray-500">
-                        {getSourcePlatformIcon(user.platform)}
-                        <span className="capitalize">{user.platform}</span>
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {filteredUsers.map(user => (
+                <div
+                  key={user.id}
+                  onClick={() => handleProfileClick(user)}
+                  className="bg-white rounded-2xl p-6 shadow-sm border border-amber-100 hover:shadow-md hover:border-amber-200 transition-all duration-200 cursor-pointer group"
+                >
+                  {/* Avatar and Status */}
+                  <div className="text-center mb-4">
+                    <div className={`w-16 h-16 rounded-full flex items-center justify-center text-white text-lg font-bold ${getAvatarColor(user.full_name)} mx-auto mb-3 group-hover:scale-110 transition-transform duration-200 relative`}>
+                      {getInitials(user.display_name)}
+                      
+                      {/* Profile type indicator */}
+                      <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-white rounded-full flex items-center justify-center border-2 border-white">
+                        {getProfileTypeIcon(user.profile_type)}
                       </div>
-                    )
-                  ) : (
-                    <div className="flex items-center justify-center gap-1 text-sm text-blue-600 font-medium">
-                      <MessageCircle size={12} />
-                      <span>Connect</span>
+                    </div>
+                    
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <div className="inline-flex items-center gap-1 bg-gray-100 text-gray-600 px-2 py-1 rounded-full text-xs font-medium">
+                        {getProfileTypeIcon(user.profile_type)}
+                        {getProfileTypeLabel(user.profile_type)}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Name and Location */}
+                  <div className="text-center mb-4">
+                    <h3 className="font-semibold text-gray-900 mb-1 group-hover:text-blue-600 transition-colors duration-200">
+                      {user.full_name}
+                    </h3>
+                    
+                    {user.location && (
+                      <div className="flex items-center justify-center gap-1 text-gray-500 text-sm">
+                        <MapPin size={12} />
+                        <span className="truncate">{user.location}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Bio */}
+                  {user.bio && (
+                    <p className="text-gray-600 text-sm text-center mb-4 line-clamp-2">
+                      {user.bio}
+                    </p>
+                  )}
+
+                  {/* Skills */}
+                  {user.skills && user.skills.length > 0 && (
+                    <div className="mb-4">
+                      <div className="flex flex-wrap gap-1 justify-center">
+                        {user.skills.slice(0, 3).map((skill, index) => (
+                          <span
+                            key={index}
+                            className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-medium"
+                          >
+                            {skill}
+                          </span>
+                        ))}
+                        {user.skills.length > 3 && (
+                          <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded text-xs font-medium">
+                            +{user.skills.length - 3}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   )}
+
+                  {/* Footer info */}
+                  <div className="text-center">
+                    {user.profile_type === 'external' ? (
+                      user.platform && (
+                        <div className="flex items-center justify-center gap-1 text-sm text-gray-500">
+                          {getSourcePlatformIcon(user.platform)}
+                          <span className="capitalize">{user.platform}</span>
+                        </div>
+                      )
+                    ) : (
+                      <div className="flex items-center justify-center gap-1 text-sm text-blue-600 font-medium">
+                        <MessageCircle size={12} />
+                        <span>Connect</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
+              ))}
+            </div>
+
+            {/* Load More Button */}
+            {pagination.hasMore && !isLoading && (
+              <div className="text-center mt-8">
+                <button
+                  onClick={loadMoreUsers}
+                  disabled={isLoadingMore}
+                  className="bg-black text-white px-8 py-3 rounded-xl hover:bg-gray-800 transition-colors duration-200 font-medium disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 mx-auto"
+                >
+                  {isLoadingMore ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      Loading more...
+                    </>
+                  ) : (
+                    `Load More (${pagination.totalCount - filteredUsers.length} remaining)`
+                  )}
+                </button>
               </div>
-            ))}
-          </div>
+            )}
+          </>
         )}
       </div>
 
