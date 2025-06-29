@@ -128,7 +128,7 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
     try {
       setIsLoading(true);
       
-      console.log('Starting to load users...');
+      console.log('🔄 Starting to load users...');
       
       // Load regular users (non-agents from profiles table)
       const { data: regularUsers, error: regularError } = await supabase
@@ -149,9 +149,10 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
         .eq('is_agent', false)
         .limit(20);
 
-      console.log('Regular users loaded:', regularUsers?.length || 0, regularError);
+      console.log('👥 Regular users loaded:', regularUsers?.length || 0);
+      if (regularError) console.error('❌ Regular users error:', regularError);
 
-      // Load agent profiles from agent_profiles table
+      // Load agent profiles from agent_profiles table - THIS IS THE KEY FIX
       const { data: agentUsers, error: agentError } = await supabase
         .from('agent_profiles')
         .select(`
@@ -164,7 +165,8 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
         `)
         .limit(10);
 
-      console.log('Agent users loaded:', agentUsers?.length || 0, agentError);
+      console.log('🤖 Agent users loaded:', agentUsers?.length || 0);
+      if (agentError) console.error('❌ Agent users error:', agentError);
 
       // Load external profiles using the correct structure from your screenshot
       const { data: externalUsers, error: externalError } = await supabase
@@ -183,36 +185,49 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
         .not('name', 'is', null)
         .limit(15);
 
-      console.log('External users loaded:', externalUsers?.length || 0, externalError);
-
-      if (regularError) console.error('Error loading regular users:', regularError);
-      if (agentError) console.error('Error loading agent users:', agentError);
-      if (externalError) console.error('Error loading external users:', externalError);
+      console.log('🌐 External users loaded:', externalUsers?.length || 0);
+      if (externalError) console.error('❌ External users error:', externalError);
 
       // Combine and format users
-      const allUsers: NetworkUser[] = [
-        // Regular users
-        ...(regularUsers || []).map(user => ({
+      const allUsers: NetworkUser[] = [];
+
+      // Add regular users
+      if (regularUsers) {
+        const formattedRegularUsers = regularUsers.map(user => ({
           ...user,
-          full_name: user.full_name || user.display_name,
+          full_name: user.full_name || user.display_name || 'Unknown User',
+          display_name: user.display_name || user.full_name || 'Unknown',
           is_available_for_work: user.is_available_for_work ?? true,
           skills: getRandomSkills(),
           profile_type: 'user' as const,
-        })),
-        // Agent profiles - FIXED: These should show up now
-        ...(agentUsers || []).map(user => ({
+        }));
+        allUsers.push(...formattedRegularUsers);
+        console.log('✅ Added regular users:', formattedRegularUsers.length);
+      }
+
+      // Add agent profiles - FIXED: Ensure these are properly added
+      if (agentUsers && agentUsers.length > 0) {
+        const formattedAgentUsers = agentUsers.map(user => ({
           ...user,
-          full_name: user.full_name || user.display_name,
+          full_name: user.full_name || user.display_name || 'AI Agent',
+          display_name: user.display_name || user.full_name || 'Agent',
           is_available_for_work: true,
           skills: getRandomSkills(),
           preferred_work_types: getRandomWorkTypes(),
           profile_type: 'agent' as const,
-        })),
-        // External profiles - using your actual table structure
-        ...(externalUsers || []).map(user => ({
+        }));
+        allUsers.push(...formattedAgentUsers);
+        console.log('✅ Added agent users:', formattedAgentUsers.length);
+      } else {
+        console.log('⚠️ No agent users found in database');
+      }
+
+      // Add external profiles - using your actual table structure
+      if (externalUsers) {
+        const formattedExternalUsers = externalUsers.map(user => ({
           id: user.id,
-          full_name: user.name, // Using 'name' from your table
-          display_name: user.name, // Using 'name' as display name too
+          full_name: user.name || 'External User', // Using 'name' from your table
+          display_name: user.name || 'External', // Using 'name' as display name too
           bio: user.profile_summary, // Using 'profile_summary' as bio
           location: user.location,
           avatar_url: user.avatar_url,
@@ -223,19 +238,26 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
           profile_url: user.profile_url, // The profile_url field
           expertise_tags: user.expertise_tags,
           tools_tags: user.tools_tags,
-        }))
-      ];
+        }));
+        allUsers.push(...formattedExternalUsers);
+        console.log('✅ Added external users:', formattedExternalUsers.length);
+      }
 
-      console.log('All users combined:', allUsers.length);
-      console.log('User breakdown:', {
+      console.log('📊 Final user breakdown:', {
         regular: regularUsers?.length || 0,
         agents: agentUsers?.length || 0,
-        external: externalUsers?.length || 0
+        external: externalUsers?.length || 0,
+        total: allUsers.length
       });
+
+      // Log agent users specifically for debugging
+      const agentUsersInFinal = allUsers.filter(u => u.profile_type === 'agent');
+      console.log('🤖 Agent users in final array:', agentUsersInFinal.length);
+      console.log('🤖 Agent user details:', agentUsersInFinal.map(u => ({ id: u.id, name: u.full_name, type: u.profile_type })));
       
       setUsers(allUsers);
     } catch (error) {
-      console.error('Error loading users:', error);
+      console.error('💥 Error loading users:', error);
     } finally {
       setIsLoading(false);
     }
@@ -263,14 +285,20 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
   const applyFilters = () => {
     let filtered = [...users];
 
+    console.log('🔍 Applying filters to', filtered.length, 'users');
+    console.log('🔍 Profile type filter:', filters.profileType);
+
     // Profile type filter
     if (filters.profileType) {
+      const beforeFilter = filtered.length;
       filtered = filtered.filter(user => user.profile_type === filters.profileType);
+      console.log(`🔍 Profile type filter: ${beforeFilter} → ${filtered.length} (filtering for '${filters.profileType}')`);
     }
 
     // Search query filter
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
+      const beforeFilter = filtered.length;
       filtered = filtered.filter(user => 
         user.full_name?.toLowerCase().includes(query) ||
         user.display_name?.toLowerCase().includes(query) ||
@@ -281,6 +309,7 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
         user.expertise_tags?.some(tag => tag.toLowerCase().includes(query)) ||
         user.tools_tags?.some(tag => tag.toLowerCase().includes(query))
       );
+      console.log(`🔍 Search filter: ${beforeFilter} → ${filtered.length} (query: '${query}')`);
     }
 
     // Service Type filter - map to relevant skills
@@ -298,6 +327,7 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
 
       const relevantSkills = skillMapping[filters.serviceType] || [];
       if (relevantSkills.length > 0) {
+        const beforeFilter = filtered.length;
         filtered = filtered.filter(user =>
           user.skills?.some(skill => 
             relevantSkills.some(relevantSkill => 
@@ -310,11 +340,13 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
             )
           )
         );
+        console.log(`🔍 Service type filter: ${beforeFilter} → ${filtered.length} (service: '${filters.serviceType}')`);
       }
     }
 
     // Industry filter - could map to user bio/background
     if (filters.industry && filters.industry !== 'Other') {
+      const beforeFilter = filtered.length;
       filtered = filtered.filter(user =>
         user.bio?.toLowerCase().includes(filters.industry.toLowerCase()) ||
         user.skills?.some(skill => 
@@ -322,12 +354,18 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
         ) ||
         user.platform?.toLowerCase().includes(filters.industry.toLowerCase())
       );
+      console.log(`🔍 Industry filter: ${beforeFilter} → ${filtered.length} (industry: '${filters.industry}')`);
     }
 
     // Timeline filter - could affect availability
     if (filters.timeline === 'Immediate') {
+      const beforeFilter = filtered.length;
       filtered = filtered.filter(user => user.is_available_for_work);
+      console.log(`🔍 Timeline filter: ${beforeFilter} → ${filtered.length} (immediate availability)`);
     }
+
+    console.log('🔍 Final filtered users:', filtered.length);
+    console.log('🔍 Agent users in filtered results:', filtered.filter(u => u.profile_type === 'agent').length);
 
     setFilteredUsers(filtered);
   };
@@ -764,6 +802,11 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
         <div className="mb-6">
           <p className="text-gray-700">
             {isLoading ? 'Loading...' : `${filteredUsers.length} professionals found`}
+            {!isLoading && (
+              <span className="text-gray-500 text-sm ml-2">
+                ({filteredUsers.filter(u => u.profile_type === 'user').length} members, {filteredUsers.filter(u => u.profile_type === 'agent').length} AI agents, {filteredUsers.filter(u => u.profile_type === 'external').length} external)
+              </span>
+            )}
           </p>
         </div>
 
