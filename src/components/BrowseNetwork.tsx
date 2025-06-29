@@ -180,6 +180,12 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
       if (agentError) console.error('Error loading agent users:', agentError);
       if (externalError) console.error('Error loading external users:', externalError);
 
+      console.log('Loaded data:', {
+        regularUsers: regularUsers?.length || 0,
+        agentUsers: agentUsers?.length || 0,
+        externalUsers: externalUsers?.length || 0
+      });
+
       // Combine and format users
       const allUsers: NetworkUser[] = [
         // Regular users
@@ -217,6 +223,7 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
         }))
       ];
 
+      console.log('All users combined:', allUsers.length);
       setUsers(allUsers);
     } catch (error) {
       console.error('Error loading users:', error);
@@ -845,7 +852,7 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
                   </div>
                 )}
 
-                {/* Footer info */}
+                {/* Footer info - Updated based on your feedback */}
                 <div className="text-center">
                   {user.profile_type === 'external' ? (
                     <div className="flex items-center justify-center gap-1 text-sm text-blue-600 font-medium">
