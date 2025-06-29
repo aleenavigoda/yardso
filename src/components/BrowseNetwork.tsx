@@ -24,6 +24,9 @@ interface NetworkUser {
   job_title?: string;
   follower_count?: number;
   is_verified?: boolean;
+  expertise_tags?: string[];
+  tools_tags?: string[];
+  platform?: string;
 }
 
 interface SearchParams {
@@ -156,24 +159,19 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
         `)
         .limit(10);
 
-      // Load external profiles - now using the correct table structure
+      // Load external profiles using the correct structure from your screenshot
       const { data: externalUsers, error: externalError } = await supabase
         .from('external_profiles')
         .select(`
           id,
           name,
-          display_name,
-          bio,
           location,
-          source_platform,
-          source_url,
-          profile_url,
-          company,
-          job_title,
-          follower_count,
-          is_verified,
-          skills,
-          avatar_url
+          profile_summary,
+          avatar_url,
+          expertise_tags,
+          tools_tags,
+          platform,
+          profile_url
         `)
         .not('name', 'is', null)
         .limit(15);
@@ -201,24 +199,21 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
           preferred_work_types: getRandomWorkTypes(),
           profile_type: 'agent' as const,
         })),
-        // External profiles - using the correct column mapping
+        // External profiles - using your actual table structure
         ...(externalUsers || []).map(user => ({
           id: user.id,
-          full_name: user.name, // external_profiles uses 'name' not 'full_name'
-          display_name: user.display_name || user.name,
-          bio: user.bio,
+          full_name: user.name, // Using 'name' from your table
+          display_name: user.name, // Using 'name' as display name too
+          bio: user.profile_summary, // Using 'profile_summary' as bio
           location: user.location,
           avatar_url: user.avatar_url,
           is_available_for_work: true,
-          skills: user.skills || getRandomSkills(),
+          skills: [...(user.expertise_tags || []), ...(user.tools_tags || [])], // Combining both tag arrays
           profile_type: 'external' as const,
-          source_platform: user.source_platform,
-          source_url: user.source_url,
-          profile_url: user.profile_url || user.source_url, // fallback to source_url
-          company: user.company,
-          job_title: user.job_title,
-          follower_count: user.follower_count,
-          is_verified: user.is_verified,
+          platform: user.platform, // The platform field from your table
+          profile_url: user.profile_url, // The profile_url field
+          expertise_tags: user.expertise_tags,
+          tools_tags: user.tools_tags,
         }))
       ];
 
@@ -266,22 +261,23 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
         user.bio?.toLowerCase().includes(query) ||
         user.skills?.some(skill => skill.toLowerCase().includes(query)) ||
         user.location?.toLowerCase().includes(query) ||
-        user.company?.toLowerCase().includes(query) ||
-        user.job_title?.toLowerCase().includes(query)
+        user.platform?.toLowerCase().includes(query) ||
+        user.expertise_tags?.some(tag => tag.toLowerCase().includes(query)) ||
+        user.tools_tags?.some(tag => tag.toLowerCase().includes(query))
       );
     }
 
     // Service Type filter - map to relevant skills
     if (filters.serviceType) {
       const skillMapping: { [key: string]: string[] } = {
-        'Design Critique': ['UI/UX Design', 'Design Critique'],
-        'Code Review': ['JavaScript', 'React', 'Node.js', 'Python', 'Code Review'],
-        'Strategy Consultation': ['Product Strategy', 'Business Development'],
-        'Legal Review': ['Legal Review'],
-        'Financial Analysis': ['Data Analysis', 'Fundraising'],
-        'Technical Consultation': ['JavaScript', 'React', 'Node.js', 'Python'],
-        'Marketing Strategy': ['Marketing Strategy'],
-        'Mentorship': ['Product Strategy', 'Business Development']
+        'Design Critique': ['UI/UX Design', 'Design Critique', 'UI/UX', 'Design'],
+        'Code Review': ['JavaScript', 'React', 'Node.js', 'Python', 'Code Review', 'Programming'],
+        'Strategy Consultation': ['Product Strategy', 'Business Development', 'Strategy'],
+        'Legal Review': ['Legal Review', 'Legal'],
+        'Financial Analysis': ['Data Analysis', 'Fundraising', 'Finance'],
+        'Technical Consultation': ['JavaScript', 'React', 'Node.js', 'Python', 'Technical'],
+        'Marketing Strategy': ['Marketing Strategy', 'Marketing'],
+        'Mentorship': ['Product Strategy', 'Business Development', 'Mentorship']
       };
 
       const relevantSkills = skillMapping[filters.serviceType] || [];
@@ -290,6 +286,11 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
           user.skills?.some(skill => 
             relevantSkills.some(relevantSkill => 
               skill.toLowerCase().includes(relevantSkill.toLowerCase())
+            )
+          ) ||
+          user.expertise_tags?.some(tag => 
+            relevantSkills.some(relevantSkill => 
+              tag.toLowerCase().includes(relevantSkill.toLowerCase())
             )
           )
         );
@@ -303,7 +304,7 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
         user.skills?.some(skill => 
           skill.toLowerCase().includes(filters.industry.toLowerCase())
         ) ||
-        user.company?.toLowerCase().includes(filters.industry.toLowerCase())
+        user.platform?.toLowerCase().includes(filters.industry.toLowerCase())
       );
     }
 
@@ -317,10 +318,9 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
 
   const handleProfileClick = (user: NetworkUser) => {
     if (user.profile_type === 'external') {
-      // For external profiles, open their profile URL (or source URL as fallback)
-      const urlToOpen = user.profile_url || user.source_url;
-      if (urlToOpen) {
-        window.open(urlToOpen, '_blank', 'noopener,noreferrer');
+      // For external profiles, open their profile URL
+      if (user.profile_url) {
+        window.open(user.profile_url, '_blank', 'noopener,noreferrer');
       }
     } else {
       // For regular users and agents, show the profile modal
@@ -816,11 +816,10 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
                   </div>
 
                   {/* External profile source */}
-                  {user.profile_type === 'external' && user.source_platform && (
+                  {user.profile_type === 'external' && user.platform && (
                     <div className="flex items-center justify-center gap-1 text-xs text-gray-500 mb-2">
-                      {getSourcePlatformIcon(user.source_platform)}
-                      <span className="capitalize">{user.source_platform}</span>
-                      {user.is_verified && <Star size={10} className="text-yellow-500 fill-current" />}
+                      {getSourcePlatformIcon(user.platform)}
+                      <span className="capitalize">{user.platform}</span>
                     </div>
                   )}
                 </div>
@@ -830,13 +829,6 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
                   <h3 className="font-semibold text-gray-900 mb-1 group-hover:text-blue-600 transition-colors duration-200">
                     {user.full_name}
                   </h3>
-                  
-                  {/* Job title and company for external profiles */}
-                  {user.profile_type === 'external' && (user.job_title || user.company) && (
-                    <p className="text-xs text-gray-600 mb-1">
-                      {user.job_title}{user.job_title && user.company && ' at '}{user.company}
-                    </p>
-                  )}
                   
                   {user.location && (
                     <div className="flex items-center justify-center gap-1 text-gray-500 text-sm">
@@ -876,10 +868,10 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
 
                 {/* Footer info */}
                 <div className="text-center">
-                  {user.profile_type === 'external' && user.follower_count ? (
+                  {user.profile_type === 'external' ? (
                     <div className="flex items-center justify-center gap-1 text-sm text-gray-500">
-                      <Users size={12} />
-                      <span>{user.follower_count.toLocaleString()} followers</span>
+                      <ExternalLink size={12} />
+                      <span>View Profile</span>
                     </div>
                   ) : user.time_balance_hours !== undefined ? (
                     <div className="flex items-center justify-center gap-1 text-sm">
