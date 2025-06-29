@@ -104,7 +104,7 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
       let profileData: ProfileData | null = null;
 
       // First try regular profiles table
-      const { data: userProfile } = await supabase
+      const { data: userProfile, error: userError } = await supabase
         .from('profiles')
         .select(`
           id,
@@ -118,6 +118,11 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
         .eq('id', profile.id)
         .single();
 
+      // Check if the error is specifically "no rows found" (PGRST116)
+      if (userError && userError.code !== 'PGRST116') {
+        throw userError;
+      }
+
       if (userProfile) {
         profileData = {
           ...userProfile,
@@ -126,7 +131,7 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
         };
       } else {
         // Try agent profiles table
-        const { data: agentProfile } = await supabase
+        const { data: agentProfile, error: agentError } = await supabase
           .from('agent_profiles')
           .select(`
             id,
@@ -138,6 +143,11 @@ const Feed = ({ onBack, onDashboardClick, onSignOut }: FeedProps) => {
           `)
           .eq('id', profile.id)
           .single();
+
+        // Check if the error is specifically "no rows found" (PGRST116)
+        if (agentError && agentError.code !== 'PGRST116') {
+          throw agentError;
+        }
 
         if (agentProfile) {
           profileData = {
