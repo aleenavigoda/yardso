@@ -25,9 +25,8 @@ interface SearchParams {
   companyStage: string;
 }
 
-function MainApp() {
+function LandingPage() {
   const navigate = useNavigate();
-  const location = useLocation();
   const [searchValue, setSearchValue] = useState('');
   const [isTimeLoggingOpen, setIsTimeLoggingOpen] = useState(false);
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
@@ -35,14 +34,6 @@ function MainApp() {
   const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | undefined>();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
-  const [isInitializing, setIsInitializing] = useState(true);
-
-  // Determine current page from URL
-  const currentPage = location.pathname;
-  const isLandingPage = currentPage === '/';
-  const isDashboardPage = currentPage === '/dashboard';
-  const isFeedPage = currentPage === '/feed';
-  const isBrowsePage = currentPage === '/browse';
 
   const detectUrlType = (url: string): string => {
     if (url.includes('github.com')) return 'github';
@@ -206,11 +197,7 @@ function MainApp() {
               }
             }
             
-            // Only navigate if we're on the landing page
-            if (location.pathname === '/') {
-              navigate('/dashboard');
-            }
-            return; // Exit early with cached data
+            return; // Don't auto-navigate, let user stay on landing page
           }
         } catch (e) {
           console.error('Error parsing stored profile:', e);
@@ -275,11 +262,6 @@ function MainApp() {
         }
       }
       
-      // Only navigate if we're on the landing page
-      if (location.pathname === '/') {
-        navigate('/dashboard');
-      }
-      
       console.log('Auth success completed successfully');
     } catch (error: any) {
       console.error('Error in handleAuthSuccess:', error);
@@ -295,11 +277,6 @@ function MainApp() {
       localStorage.setItem('userProfile', JSON.stringify(basicProfile));
       setUserProfile(basicProfile);
       setIsAuthenticated(true);
-      
-      // Only navigate if we're on the landing page
-      if (location.pathname === '/') {
-        navigate('/dashboard');
-      }
     }
   };
 
@@ -311,7 +288,7 @@ function MainApp() {
     setUserProfile(null);
   };
 
-  // Simplified auth initialization with shorter timeout and better error handling
+  // Auth state management
   useEffect(() => {
     let isMounted = true;
     
@@ -329,9 +306,6 @@ function MainApp() {
           });
         } else if (event === 'SIGNED_OUT') {
           clearAuthState();
-          if (location.pathname !== '/') {
-            navigate('/');
-          }
         }
       }
     );
@@ -359,14 +333,12 @@ function MainApp() {
           console.log('Invalid JWT session detected, clearing auth state');
           supabase.auth.signOut().catch(console.error);
           clearAuthState();
-          setIsInitializing(false);
           return;
         }
         
         if (error) {
           console.error('Auth session error:', error);
           clearAuthState();
-          setIsInitializing(false);
           return;
         }
         
@@ -377,13 +349,10 @@ function MainApp() {
           clearAuthState();
         }
         
-        setIsInitializing(false);
-        
       } catch (error: any) {
         console.error('Auth initialization error:', error);
         if (isMounted) {
           clearAuthState();
-          setIsInitializing(false);
         }
       }
     };
@@ -395,7 +364,7 @@ function MainApp() {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, [location.pathname, navigate]);
+  }, []);
 
   const handleTimeLoggingSignUp = (timeLoggingData: TimeLoggingData) => {
     setPendingTimeLog(timeLoggingData);
@@ -485,84 +454,21 @@ function MainApp() {
     try {
       await supabase.auth.signOut();
       clearAuthState();
-      navigate('/');
     } catch (error) {
       console.error('Error signing out:', error);
       // Still clear state even if signOut fails
       clearAuthState();
-      navigate('/');
     }
   };
 
-  // Show loading screen during initialization (with shorter timeout)
-  if (isInitializing) {
-    return (
-      <div className="min-h-screen w-full bg-amber-200 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-2xl font-bold text-black italic mb-4">yard</div>
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto"></div>
-          <div className="text-sm text-gray-600 mt-4">Loading your workyard...</div>
-        </div>
-      </div>
-    );
-  }
-
-  // Show browse network if user wants to see it
-  if (isBrowsePage) {
-    return (
-      <BrowseNetwork 
-        onBack={() => navigate('/')}
-        onFeedClick={() => navigate('/feed')}
-        onDashboardClick={() => navigate('/dashboard')}
-        onSignOut={handleSignOut}
-        searchParams={browseNetworkParams}
-      />
-    );
-  }
-
-  // Show feed if user is authenticated and wants to see it
-  if (isFeedPage && isAuthenticated) {
-    return (
-      <Feed 
-        onBack={() => navigate('/')} 
-        onDashboardClick={() => navigate('/dashboard')}
-        onSignOut={handleSignOut}
-      />
-    );
-  }
-
-  // Show dashboard if user is authenticated and wants to see it
-  if (isDashboardPage && isAuthenticated) {
-    return (
-      <Dashboard 
-        onBack={() => navigate('/')} 
-        onFeedClick={() => navigate('/feed')}
-        onBrowseNetworkClick={() => navigate('/browse')}
-      />
-    );
-  }
-
-  // If user is authenticated but on landing page, redirect to dashboard
-  if (isAuthenticated && isLandingPage) {
-    navigate('/dashboard');
-    return null;
-  }
-
-  // If user is not authenticated but trying to access protected routes, redirect to landing
-  if (!isAuthenticated && (isDashboardPage || isFeedPage)) {
-    navigate('/');
-    return null;
-  }
-
-  // Show landing page for non-authenticated users or when explicitly on landing page
   return (
     <div className="min-h-screen w-full bg-amber-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         <Header 
           isAuthenticated={isAuthenticated}
           userProfile={userProfile}
-          showDashboard={isDashboardPage}
-          showFeed={isFeedPage}
+          showDashboard={false}
+          showFeed={false}
           onSignUpSuccess={handleHeaderSignUpSuccess}
           onSignInSuccess={handleHeaderSignInSuccess}
           onDashboardClick={() => navigate('/dashboard')}
@@ -570,8 +476,8 @@ function MainApp() {
           onSignOut={handleSignOut}
         />
         <main className="mt-16 md:mt-24">
-          {/* Only show Hero section if not authenticated */}
-          {!isAuthenticated && <Hero />}
+          {/* Always show Hero section on landing page */}
+          <Hero />
           
           {/* Show time logging banner for both authenticated and non-authenticated users */}
           <TimeLoggingBanner onLogTime={() => setIsTimeLoggingOpen(true)} />
@@ -604,12 +510,154 @@ function MainApp() {
   );
 }
 
+function MainApp() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [isInitializing, setIsInitializing] = useState(true);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [userProfile, setUserProfile] = useState<any>(null);
+
+  // Determine current page from URL
+  const currentPage = location.pathname;
+  const isLandingPage = currentPage === '/';
+  const isDashboardPage = currentPage === '/dashboard';
+  const isFeedPage = currentPage === '/feed';
+  const isBrowsePage = currentPage === '/browse';
+
+  // Auth state management for protected routes
+  useEffect(() => {
+    let isMounted = true;
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      async (event, session) => {
+        if (!isMounted) return;
+        
+        if (event === 'SIGNED_IN' && session?.user) {
+          setIsAuthenticated(true);
+          // Get profile from localStorage or fetch it
+          const storedProfile = localStorage.getItem('userProfile');
+          if (storedProfile) {
+            setUserProfile(JSON.parse(storedProfile));
+          }
+        } else if (event === 'SIGNED_OUT') {
+          setIsAuthenticated(false);
+          setUserProfile(null);
+          // Redirect to landing page if on protected route
+          if (isDashboardPage || isFeedPage) {
+            navigate('/');
+          }
+        }
+        
+        setIsInitializing(false);
+      }
+    );
+
+    const initAuth = async () => {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        
+        if (session?.user) {
+          setIsAuthenticated(true);
+          const storedProfile = localStorage.getItem('userProfile');
+          if (storedProfile) {
+            setUserProfile(JSON.parse(storedProfile));
+          }
+        } else {
+          setIsAuthenticated(false);
+          setUserProfile(null);
+        }
+      } catch (error) {
+        console.error('Auth initialization error:', error);
+        setIsAuthenticated(false);
+        setUserProfile(null);
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+
+    initAuth();
+
+    return () => {
+      isMounted = false;
+      subscription.unsubscribe();
+    };
+  }, [navigate, isDashboardPage, isFeedPage]);
+
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+      navigate('/');
+    } catch (error) {
+      console.error('Error signing out:', error);
+      navigate('/');
+    }
+  };
+
+  // Show loading screen during initialization
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen w-full bg-amber-200 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-2xl font-bold text-black italic mb-4">yard</div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto"></div>
+          <div className="text-sm text-gray-600 mt-4">Loading your workyard...</div>
+        </div>
+      </div>
+    );
+  }
+
+  // Protected route checks
+  if (!isAuthenticated && (isDashboardPage || isFeedPage)) {
+    navigate('/');
+    return null;
+  }
+
+  // Route-specific components
+  if (isBrowsePage) {
+    return (
+      <BrowseNetwork 
+        onBack={() => navigate('/')}
+        onFeedClick={() => navigate('/feed')}
+        onDashboardClick={() => navigate('/dashboard')}
+        onSignOut={handleSignOut}
+        searchParams={undefined}
+      />
+    );
+  }
+
+  if (isFeedPage && isAuthenticated) {
+    return (
+      <Feed 
+        onBack={() => navigate('/')} 
+        onDashboardClick={() => navigate('/dashboard')}
+        onSignOut={handleSignOut}
+      />
+    );
+  }
+
+  if (isDashboardPage && isAuthenticated) {
+    return (
+      <Dashboard 
+        onBack={() => navigate('/')} 
+        onFeedClick={() => navigate('/feed')}
+        onBrowseNetworkClick={() => navigate('/browse')}
+      />
+    );
+  }
+
+  // Default to landing page
+  return <LandingPage />;
+}
+
 function App() {
   return (
     <Router>
       <Routes>
         <Route path="/invite/:token" element={<InviteSignUpPage />} />
-        <Route path="/*" element={<MainApp />} />
+        <Route path="/dashboard" element={<MainApp />} />
+        <Route path="/feed" element={<MainApp />} />
+        <Route path="/browse" element={<MainApp />} />
+        <Route path="/" element={<MainApp />} />
       </Routes>
     </Router>
   );
