@@ -206,8 +206,10 @@ function MainApp() {
               }
             }
             
-            // NAVIGATE TO DASHBOARD
-            navigate('/dashboard');
+            // Only navigate if we're on the landing page
+            if (location.pathname === '/') {
+              navigate('/dashboard');
+            }
             return; // Exit early with cached data
           }
         } catch (e) {
@@ -273,8 +275,10 @@ function MainApp() {
         }
       }
       
-      // NAVIGATE TO DASHBOARD
-      navigate('/dashboard');
+      // Only navigate if we're on the landing page
+      if (location.pathname === '/') {
+        navigate('/dashboard');
+      }
       
       console.log('Auth success completed successfully');
     } catch (error: any) {
@@ -292,8 +296,10 @@ function MainApp() {
       setUserProfile(basicProfile);
       setIsAuthenticated(true);
       
-      // NAVIGATE TO DASHBOARD EVEN ON ERROR
-      navigate('/dashboard');
+      // Only navigate if we're on the landing page
+      if (location.pathname === '/') {
+        navigate('/dashboard');
+      }
     }
   };
 
@@ -312,7 +318,7 @@ function MainApp() {
     // Set up auth state listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event);
+        console.log('Auth state changed:', event, 'Session exists:', !!session);
         
         if (!isMounted) return;
         
@@ -323,6 +329,9 @@ function MainApp() {
           });
         } else if (event === 'SIGNED_OUT') {
           clearAuthState();
+          if (location.pathname !== '/') {
+            navigate('/');
+          }
         }
       }
     );
@@ -386,7 +395,7 @@ function MainApp() {
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [location.pathname, navigate]);
 
   const handleTimeLoggingSignUp = (timeLoggingData: TimeLoggingData) => {
     setPendingTimeLog(timeLoggingData);
@@ -536,6 +545,12 @@ function MainApp() {
   // If user is authenticated but on landing page, redirect to dashboard
   if (isAuthenticated && isLandingPage) {
     navigate('/dashboard');
+    return null;
+  }
+
+  // If user is not authenticated but trying to access protected routes, redirect to landing
+  if (!isAuthenticated && (isDashboardPage || isFeedPage)) {
+    navigate('/');
     return null;
   }
 

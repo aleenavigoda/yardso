@@ -43,12 +43,17 @@ const Header = ({
     onSignOut?.();
   };
 
+  const handleLogoClick = () => {
+    // Navigate to home page
+    window.location.href = '/';
+  };
+
   return (
     <>
       <header className="flex justify-between items-center">
         <div className="w-28">
           <button
-            onClick={() => window.location.href = '/'}
+            onClick={handleLogoClick}
             className="text-2xl font-bold text-black italic hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
           >
             yard

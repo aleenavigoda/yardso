@@ -16,7 +16,13 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    // Override the redirect URL for development
-    redirectTo: window.location.origin
+    // Use the current origin for redirects
+    redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined,
+    // Persist session in localStorage
+    persistSession: true,
+    // Auto refresh tokens
+    autoRefreshToken: true,
+    // Detect session in URL
+    detectSessionInUrl: true
   }
 })
