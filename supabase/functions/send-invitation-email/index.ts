@@ -1,5 +1,4 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -32,7 +31,24 @@ serve(async (req) => {
       invitation_token 
     }: InvitationEmailRequest = await req.json()
 
+    console.log('📧 Email function called with:', {
+      invitee_email,
+      invitee_name,
+      inviter_name,
+      hours,
+      mode,
+      invitation_token
+    })
+
     if (!invitee_email || !invitee_name || !inviter_name || !hours || !mode || !invitation_token) {
+      console.error('❌ Missing required fields:', {
+        invitee_email: !!invitee_email,
+        invitee_name: !!invitee_name,
+        inviter_name: !!inviter_name,
+        hours: !!hours,
+        mode: !!mode,
+        invitation_token: !!invitation_token
+      })
       return new Response(
         JSON.stringify({ error: 'Missing required fields' }),
         { 
@@ -42,89 +58,146 @@ serve(async (req) => {
       )
     }
 
-    // Initialize Supabase client with service role key for admin operations
-    const supabaseAdmin = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
-
     // Create a custom invitation URL that goes to our signup page with the token
     const siteUrl = Deno.env.get('SITE_URL') || 'http://localhost:5173'
     const inviteUrl = `${siteUrl}/invite/${invitation_token}`
+
+    console.log('🔗 Generated invite URL:', inviteUrl)
 
     // Generate email content
     const actionText = mode === 'helped' ? 'helped you' : 'you helped them'
     const subject = `${inviter_name} wants to track time with you on Yard`
     
     const htmlContent = `
-      <h2>You have been invited to Yard</h2>
-      <p>Hi ${invitee_name},</p>
-      <p>${inviter_name} wants to track ${hours} hour${hours !== 1 ? 's' : ''} of time where ${actionText} on Yard.</p>
-      <p>Yard is a professional time tracking and networking platform where time becomes currency and expertise flows freely through your network.</p>
-      <p><a href="${inviteUrl}" style="background-color: #000; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block;">Join Yard & Confirm Time</a></p>
-      <p>If the button doesn't work, copy and paste this link into your browser:</p>
-      <p>${inviteUrl}</p>
-      <p>Best regards,<br>The Yard Team</p>
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${subject}</title>
+      </head>
+      <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+        <div style="background-color: #fbbf24; padding: 30px; border-radius: 20px; text-align: center; margin-bottom: 30px;">
+          <h1 style="font-size: 32px; font-weight: bold; color: black; font-style: italic; margin: 0;">yard</h1>
+        </div>
+        
+        <h2 style="color: #1f2937; margin-bottom: 20px;">You have been invited to Yard</h2>
+        
+        <p style="font-size: 16px; margin-bottom: 15px;">Hi ${invitee_name},</p>
+        
+        <div style="background-color: #fef3c7; border: 1px solid #f59e0b; border-radius: 12px; padding: 20px; margin: 20px 0;">
+          <p style="margin: 0; color: #92400e;">
+            <strong>⏰ Time Log Waiting for You</strong><br>
+            <strong>${inviter_name}</strong> wants to track <strong>${hours} hour${hours !== 1 ? 's' : ''}</strong> where ${actionText} on Yard.
+          </p>
+        </div>
+        
+        <p style="font-size: 16px; margin-bottom: 25px;">
+          Yard is a professional time tracking and networking platform where time becomes currency and expertise flows freely through your network.
+        </p>
+        
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="${inviteUrl}" style="background-color: #000; color: white; padding: 15px 30px; text-decoration: none; border-radius: 12px; display: inline-block; font-weight: 600; font-size: 16px;">Join Yard & Confirm Time</a>
+        </div>
+        
+        <p style="font-size: 14px; color: #6b7280; margin-top: 30px;">
+          If the button doesn't work, copy and paste this link into your browser:<br>
+          <a href="${inviteUrl}" style="color: #3b82f6; word-break: break-all;">${inviteUrl}</a>
+        </p>
+        
+        <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
+        
+        <p style="font-size: 14px; color: #6b7280;">
+          Best regards,<br>
+          The Yard Team
+        </p>
+      </body>
+      </html>
     `
 
     const textContent = `
-      Hi ${invitee_name},
+Hi ${invitee_name},
 
-      ${inviter_name} wants to track ${hours} hour${hours !== 1 ? 's' : ''} of time where ${actionText} on Yard.
+${inviter_name} wants to track ${hours} hour${hours !== 1 ? 's' : ''} of time where ${actionText} on Yard.
 
-      Yard is a professional time tracking and networking platform where time becomes currency and expertise flows freely through your network.
+Yard is a professional time tracking and networking platform where time becomes currency and expertise flows freely through your network.
 
-      Click this link to join Yard and confirm the time:
-      ${inviteUrl}
+Click this link to join Yard and confirm the time:
+${inviteUrl}
 
-      Best regards,
-      The Yard Team
-    `
+If the link doesn't work, copy and paste it into your browser.
 
-    // For now, we'll use a simple email service simulation
-    // In production, you would integrate with SendGrid, Resend, or another email service
-    console.log('Would send email to:', invitee_email)
-    console.log('Subject:', subject)
-    console.log('HTML Content:', htmlContent)
-    console.log('Text Content:', textContent)
+Best regards,
+The Yard Team
+    `.trim()
 
-    // TODO: Replace this with actual email service integration
-    // Example with SendGrid:
+    console.log('📝 Generated email content for:', invitee_email)
+    console.log('📧 Subject:', subject)
+
+    // For development/demo purposes, we'll simulate sending the email
+    // In production, you would integrate with a real email service like:
+    // - SendGrid
+    // - Resend
+    // - AWS SES
+    // - Postmark
+    // etc.
+
+    // Simulate email sending delay
+    await new Promise(resolve => setTimeout(resolve, 1000))
+
+    // Log the email details (in production, this would be the actual email service call)
+    console.log('✅ Email would be sent to:', invitee_email)
+    console.log('📧 Email details:', {
+      to: invitee_email,
+      subject: subject,
+      html_length: htmlContent.length,
+      text_length: textContent.length,
+      invite_url: inviteUrl
+    })
+
+    // TODO: Replace this simulation with actual email service integration
+    // Example with Resend (recommended for simplicity):
     /*
-    const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+    const response = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${Deno.env.get('SENDGRID_API_KEY')}`,
+        'Authorization': `Bearer ${Deno.env.get('RESEND_API_KEY')}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        personalizations: [{
-          to: [{ email: invitee_email, name: invitee_name }],
-          subject: subject
-        }],
-        from: { email: 'noreply@yard.app', name: 'Yard' },
-        content: [
-          { type: 'text/plain', value: textContent },
-          { type: 'text/html', value: htmlContent }
-        ]
+        from: 'Yard <noreply@yard.app>',
+        to: [invitee_email],
+        subject: subject,
+        html: htmlContent,
+        text: textContent
       })
     })
-    */
 
-    console.log('Custom invitation email would be sent successfully to:', invitee_email)
+    if (!response.ok) {
+      throw new Error(`Email service error: ${response.status}`)
+    }
+
+    const result = await response.json()
+    console.log('Email sent successfully:', result)
+    */
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: 'Invitation email sent successfully',
-        invite_url: inviteUrl
+        invite_url: inviteUrl,
+        debug: {
+          to: invitee_email,
+          subject: subject,
+          simulated: true
+        }
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     )
   } catch (error) {
-    console.error('Error in send-invitation-email function:', error)
+    console.error('💥 Error in send-invitation-email function:', error)
     return new Response(
       JSON.stringify({ 
         error: 'Failed to send invitation email',
