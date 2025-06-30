@@ -53,19 +53,17 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
         // Reset form
         setFormData({ email: '', password: '' });
         setError('');
-        setIsLoading(false);
         
-        // Close modal immediately - the auth state change will be handled by App.tsx
-        console.log('Sign in successful, closing modal');
-        onClose();
+        // The auth state change listener will handle the rest
+        console.log('Sign in successful, calling onSignInSuccess');
         onSignInSuccess();
       } else {
         setError('Sign in failed. Please try again.');
-        setIsLoading(false);
       }
     } catch (err: any) {
       console.error('Sign in error:', err);
       setError('An unexpected error occurred. Please try again.');
+    } finally {
       setIsLoading(false);
     }
   };

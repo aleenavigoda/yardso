@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
 import BrowseNetworkPage from './pages/BrowseNetworkPage';
 import Feed from './components/Feed';
@@ -10,11 +10,12 @@ import SignInModal from './components/SignInModal';
 import { supabase } from './lib/supabase';
 import type { TimeLoggingData } from './types';
 
-function App() {
+function AppContent() {
   // Centralized authentication state
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+  const navigate = useNavigate();
   
   // Modal states
   const [isTimeLoggingOpen, setIsTimeLoggingOpen] = useState(false);
@@ -186,6 +187,8 @@ function App() {
               }
             }
             
+            // Navigate to dashboard after successful auth
+            navigate('/dashboard');
             return; // Exit early with cached data
           }
         } catch (e) {
@@ -251,6 +254,9 @@ function App() {
         }
       }
       
+      // Navigate to dashboard after successful auth
+      navigate('/dashboard');
+      
       console.log('Auth success completed successfully');
     } catch (error: any) {
       console.error('Error in handleAuthSuccess:', error);
@@ -266,6 +272,9 @@ function App() {
       localStorage.setItem('userProfile', JSON.stringify(basicProfile));
       setUserProfile(basicProfile);
       setIsAuthenticated(true);
+      
+      // Navigate to dashboard even if there were profile errors
+      navigate('/dashboard');
     }
   };
 
@@ -291,6 +300,8 @@ function App() {
     } finally {
       // Always clear auth state regardless of server response
       clearAuthState();
+      // Navigate to home after sign out
+      navigate('/');
     }
   };
 
@@ -300,6 +311,8 @@ function App() {
 
   const handleSignInSuccess = () => {
     setIsSignInOpen(false);
+    // handleAuthSuccess will be called by the auth state change listener
+    // and will handle navigation to dashboard
   };
 
   // Simplified auth initialization with shorter timeout and better error handling
@@ -398,7 +411,7 @@ function App() {
   }
 
   return (
-    <Router>
+    <>
       <Routes>
         <Route path="/invite/:token" element={<InviteSignUpPage />} />
         <Route 
@@ -435,8 +448,8 @@ function App() {
           element={
             <ProtectedRoute isAuthenticated={isAuthenticated}>
               <Feed 
-                onBack={() => window.location.href = '/'} 
-                onDashboardClick={() => window.location.href = '/dashboard'}
+                onBack={() => navigate('/')} 
+                onDashboardClick={() => navigate('/dashboard')}
                 onSignOut={handleSignOut}
               />
             </ProtectedRoute>
@@ -447,9 +460,9 @@ function App() {
           element={
             <ProtectedRoute isAuthenticated={isAuthenticated}>
               <Dashboard 
-                onBack={() => window.location.href = '/'} 
-                onFeedClick={() => window.location.href = '/feed'}
-                onBrowseNetworkClick={() => window.location.href = '/browse'}
+                onBack={() => navigate('/')} 
+                onFeedClick={() => navigate('/feed')}
+                onBrowseNetworkClick={() => navigate('/browse')}
               />
             </ProtectedRoute>
           } 
@@ -462,6 +475,14 @@ function App() {
         onClose={() => setIsSignInOpen(false)}
         onSignInSuccess={handleSignInSuccess}
       />
+    </>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <AppContent />
     </Router>
   );
 }
