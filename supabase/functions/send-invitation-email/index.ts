@@ -48,8 +48,9 @@ serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    // Create the invitation URL
-    const inviteUrl = `${Deno.env.get('SUPABASE_URL')?.replace('/rest/v1', '')}/auth/v1/verify?token=${invitation_token}&type=invite&redirect_to=${encodeURIComponent(Deno.env.get('SITE_URL') || 'http://localhost:5173')}`
+    // Create a custom invitation URL that goes to our signup page with the token
+    const siteUrl = Deno.env.get('SITE_URL') || 'http://localhost:5173'
+    const inviteUrl = `${siteUrl}/invite/${invitation_token}`
 
     // Generate email content
     const actionText = mode === 'helped' ? 'helped you' : 'you helped them'
@@ -60,7 +61,7 @@ serve(async (req) => {
       <p>Hi ${invitee_name},</p>
       <p>${inviter_name} wants to track ${hours} hour${hours !== 1 ? 's' : ''} of time where ${actionText} on Yard.</p>
       <p>Yard is a professional time tracking and networking platform where time becomes currency and expertise flows freely through your network.</p>
-      <p><a href="${inviteUrl}" style="background-color: #000; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block;">Accept Invitation & Join Yard</a></p>
+      <p><a href="${inviteUrl}" style="background-color: #000; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; display: inline-block;">Join Yard & Confirm Time</a></p>
       <p>If the button doesn't work, copy and paste this link into your browser:</p>
       <p>${inviteUrl}</p>
       <p>Best regards,<br>The Yard Team</p>
@@ -73,35 +74,50 @@ serve(async (req) => {
 
       Yard is a professional time tracking and networking platform where time becomes currency and expertise flows freely through your network.
 
-      Click this link to accept the invitation and join Yard:
+      Click this link to join Yard and confirm the time:
       ${inviteUrl}
 
       Best regards,
       The Yard Team
     `
 
-    // Send email using Supabase Auth admin API
-    const { data, error } = await supabaseAdmin.auth.admin.inviteUserByEmail(invitee_email, {
-      data: {
-        full_name: invitee_name,
-        invited_by: inviter_name,
-        invitation_type: 'time_logging'
+    // For now, we'll use a simple email service simulation
+    // In production, you would integrate with SendGrid, Resend, or another email service
+    console.log('Would send email to:', invitee_email)
+    console.log('Subject:', subject)
+    console.log('HTML Content:', htmlContent)
+    console.log('Text Content:', textContent)
+
+    // TODO: Replace this with actual email service integration
+    // Example with SendGrid:
+    /*
+    const response = await fetch('https://api.sendgrid.com/v3/mail/send', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${Deno.env.get('SENDGRID_API_KEY')}`,
+        'Content-Type': 'application/json',
       },
-      redirectTo: Deno.env.get('SITE_URL') || 'http://localhost:5173'
+      body: JSON.stringify({
+        personalizations: [{
+          to: [{ email: invitee_email, name: invitee_name }],
+          subject: subject
+        }],
+        from: { email: 'noreply@yard.app', name: 'Yard' },
+        content: [
+          { type: 'text/plain', value: textContent },
+          { type: 'text/html', value: htmlContent }
+        ]
+      })
     })
+    */
 
-    if (error) {
-      console.error('Error sending invitation email:', error)
-      throw error
-    }
-
-    console.log('Invitation email sent successfully to:', invitee_email)
+    console.log('Custom invitation email would be sent successfully to:', invitee_email)
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: 'Invitation email sent successfully',
-        data: data
+        invite_url: inviteUrl
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 

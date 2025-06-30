@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Header from './components/Header';
 import Hero from './components/Hero';
 import SearchForm from './components/SearchForm';
@@ -10,6 +11,7 @@ import SignUpModal from './components/SignUpModal';
 import Dashboard from './components/Dashboard';
 import Feed from './components/Feed';
 import BrowseNetwork from './components/BrowseNetwork';
+import InviteSignUpPage from './components/InviteSignUpPage';
 import { supabase } from './lib/supabase';
 import type { TimeLoggingData } from './types';
 
@@ -23,7 +25,7 @@ interface SearchParams {
   companyStage: string;
 }
 
-function App() {
+function MainApp() {
   const [searchValue, setSearchValue] = useState('');
   const [isTimeLoggingOpen, setIsTimeLoggingOpen] = useState(false);
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
@@ -603,6 +605,17 @@ function App() {
         onSignUpSuccess={handleSignUpSuccess}
       />
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/invite/:token" element={<InviteSignUpPage />} />
+        <Route path="/*" element={<MainApp />} />
+      </Routes>
+    </Router>
   );
 }
 
