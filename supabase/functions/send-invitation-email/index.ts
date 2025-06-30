@@ -157,67 +157,75 @@ The Yard Team
     
     if (!resendApiKey) {
       console.error('❌ RESEND_API_KEY not found in environment')
-      console.log('🔍 Available environment variables:', Object.keys(Deno.env.toObject()))
+      console.log('🔍 Available environment variables:', Object.keys(Deno.env.toObject()).filter(key => !key.includes('SECRET')))
       
-      // For development, we'll simulate sending the email
-      console.log('📧 DEVELOPMENT MODE: Would send email to:', invitee_email)
-      console.log('📧 Email subject:', subject)
-      console.log('📧 Invite URL:', inviteUrl)
-      
-      // Return success but indicate email service not configured
       return new Response(
         JSON.stringify({ 
-          success: true, 
-          message: 'Invitation created successfully! Email service not configured for development.',
+          success: false, 
+          error: 'Email service not configured',
+          message: 'RESEND_API_KEY not found in environment variables',
           invite_url: inviteUrl,
-          note: 'RESEND_API_KEY not configured - please set up email service in production',
-          dev_info: {
-            to: invitee_email,
-            subject: subject,
-            invite_url: inviteUrl,
-            html_preview: htmlContent.substring(0, 200) + '...'
+          debug_info: {
+            env_vars_count: Object.keys(Deno.env.toObject()).length,
+            has_resend_key: false
           }
         }),
         { 
+          status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       )
     }
 
     console.log('📮 Sending email via Resend API...')
+    console.log('🔑 Using API key:', resendApiKey.substring(0, 10) + '...')
 
     // Send email using Resend API
+    const emailPayload = {
+      from: 'Yard <noreply@yard.app>',
+      to: [invitee_email],
+      subject: subject,
+      html: htmlContent,
+      text: textContent
+    }
+
+    console.log('📤 Email payload:', {
+      from: emailPayload.from,
+      to: emailPayload.to,
+      subject: emailPayload.subject,
+      html_length: emailPayload.html.length,
+      text_length: emailPayload.text.length
+    })
+
     const emailResponse = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${resendApiKey}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        from: 'Yard <noreply@yard.app>',
-        to: [invitee_email],
-        subject: subject,
-        html: htmlContent,
-        text: textContent
-      })
+      body: JSON.stringify(emailPayload)
     })
 
+    console.log('📬 Resend API response status:', emailResponse.status)
+    console.log('📬 Resend API response headers:', Object.fromEntries(emailResponse.headers.entries()))
+
     const emailResult = await emailResponse.json()
+    console.log('📬 Resend API response body:', emailResult)
 
     if (!emailResponse.ok) {
       console.error('❌ Resend API error:', emailResult)
       
-      // Don't fail the entire request if email fails
-      // The invitation was still created successfully
       return new Response(
         JSON.stringify({ 
-          success: true, 
-          message: 'Invitation created successfully, but email delivery failed.',
+          success: false, 
+          error: 'Email delivery failed',
+          message: emailResult.message || 'Unknown email error',
           invite_url: inviteUrl,
-          email_error: emailResult.message || 'Unknown email error',
-          fallback_message: `Please share this invitation link directly: ${inviteUrl}`
+          resend_error: emailResult,
+          status_code: emailResponse.status
         }),
         { 
+          status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       )
@@ -230,7 +238,8 @@ The Yard Team
         success: true, 
         message: 'Invitation email sent successfully!',
         invite_url: inviteUrl,
-        email_id: emailResult.id
+        email_id: emailResult.id,
+        resend_response: emailResult
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -239,13 +248,12 @@ The Yard Team
   } catch (error) {
     console.error('💥 Error in send-invitation-email function:', error)
     
-    // Don't fail the entire request - the invitation was still created
     return new Response(
       JSON.stringify({ 
         success: false,
-        message: 'Invitation created but email function encountered an error',
-        email_error: error.message,
-        note: 'The invitation was created successfully in the database'
+        error: 'Email function error',
+        message: error.message,
+        stack: error.stack
       }),
       { 
         status: 500,
