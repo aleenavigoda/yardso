@@ -70,7 +70,6 @@ serve(async (req) => {
     console.log('🔧 Environment check:', {
       hasResendKey: !!resendApiKey,
       resendKeyLength: resendApiKey?.length || 0,
-      resendKeyPrefix: resendApiKey ? resendApiKey.substring(0, 7) + '...' : 'none',
       siteUrl
     })
     
@@ -160,83 +159,74 @@ Best regards,
 The Yard Team
     `.trim()
 
-    // Try multiple sender configurations
-    const senderConfigs = [
-      'Aleena from Yard <aleena@publics.world>',
-      'Yard <aleena@publics.world>',
-      'aleena@publics.world'
-    ]
-
-    let lastError = null
-    let emailResult = null
-
-    for (const fromAddress of senderConfigs) {
-      console.log(`📤 Attempting to send email from: ${fromAddress}`)
-      
-      const emailPayload = {
-        from: fromAddress,
-        to: [invitee_email],
-        subject: subject,
-        html: htmlContent,
-        text: textContent
-      }
-
-      try {
-        const emailResponse = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${resendApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(emailPayload)
-        })
-
-        console.log(`📬 Resend API response status for ${fromAddress}:`, emailResponse.status)
-        
-        emailResult = await emailResponse.json()
-        console.log(`📬 Resend API response for ${fromAddress}:`, emailResult)
-
-        if (emailResponse.ok) {
-          console.log(`✅ Email sent successfully from ${fromAddress}!`)
-          return new Response(
-            JSON.stringify({ 
-              success: true, 
-              message: 'Invitation email sent successfully!',
-              invite_url: inviteUrl,
-              email_id: emailResult.id,
-              from_address: fromAddress
-            }),
-            { 
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-            }
-          )
-        } else {
-          lastError = emailResult
-          console.log(`❌ Email failed from ${fromAddress}, trying next config...`)
-        }
-      } catch (fetchError) {
-        console.error(`💥 Fetch error for ${fromAddress}:`, fetchError)
-        lastError = { error: fetchError.message }
-      }
+    // Use the correct verified domain format for Resend
+    // Based on your Resend dashboard, use the exact format that works
+    const fromAddress = 'aleena@publics.world'
+    
+    console.log(`📤 Sending email from verified domain: ${fromAddress}`)
+    
+    const emailPayload = {
+      from: fromAddress,
+      to: [invitee_email],
+      subject: subject,
+      html: htmlContent,
+      text: textContent
     }
 
-    // If all sender configs failed
-    console.error('❌ All email sending attempts failed. Last error:', lastError)
+    console.log('📬 Email payload:', {
+      from: emailPayload.from,
+      to: emailPayload.to,
+      subject: emailPayload.subject,
+      hasHtml: !!emailPayload.html,
+      hasText: !!emailPayload.text
+    })
+
+    const emailResponse = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(emailPayload)
+    })
+
+    console.log(`📬 Resend API response status:`, emailResponse.status)
     
-    return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: 'Email delivery failed',
-        message: 'Unable to send email invitation. The invitation link is still valid. Share this link: ' + inviteUrl,
-        invite_url: inviteUrl,
-        resend_error: lastError,
-        attempted_senders: senderConfigs
-      }),
-      { 
-        status: 200, // Return 200 so the invitation is still created
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    )
+    const emailResult = await emailResponse.json()
+    console.log(`📬 Resend API response:`, emailResult)
+
+    if (emailResponse.ok) {
+      console.log(`✅ Email sent successfully!`)
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'Invitation email sent successfully!',
+          invite_url: inviteUrl,
+          email_id: emailResult.id
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    } else {
+      console.error('❌ Resend API error:', emailResult)
+      
+      // Return detailed error information
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Email delivery failed',
+          message: `Unable to send email: ${emailResult.message || 'Unknown error'}. The invitation link is still valid.`,
+          invite_url: inviteUrl,
+          resend_error: emailResult,
+          status_code: emailResponse.status
+        }),
+        { 
+          status: 200, // Return 200 so the invitation is still created
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
+    }
 
   } catch (error) {
     console.error('💥 Critical error in send-invitation-email function:', error)
@@ -248,7 +238,7 @@ The Yard Team
       JSON.stringify({ 
         success: false,
         error: 'Email function error',
-        message: 'Unable to send email invitation. The invitation link is still valid. Share this link: ' + inviteUrl,
+        message: 'Unable to send email invitation. The invitation link is still valid.',
         invite_url: inviteUrl,
         function_error: error.message
       }),
