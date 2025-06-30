@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Clock, User, CheckCircle, XCircle, Plus, Edit, Bell, Mail, Phone, Zap } from 'lucide-react';
+import { Clock, User, CheckCircle, XCircle, Plus, Edit, Bell, Mail, Phone, Zap, Calendar, Users, TrendingUp, FileText, Award, ExternalLink } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import SignOutModal from './SignOutModal';
 import EditProfileModal from './EditProfileModal';
@@ -22,6 +22,34 @@ interface PendingTransaction {
   nudge_count: number;
 }
 
+interface TimeActivity {
+  id: string;
+  type: 'logged' | 'confirmed' | 'pending';
+  other_person: string;
+  hours: number;
+  description: string;
+  created_at: string;
+  status: string;
+}
+
+interface WorkBounty {
+  id: string;
+  title: string;
+  service_type: string;
+  budget_range?: string;
+  applications_count: number;
+  status: string;
+  created_at: string;
+}
+
+interface Connection {
+  id: string;
+  name: string;
+  avatar_url?: string;
+  last_interaction: string;
+  total_hours: number;
+}
+
 interface DashboardProps {
   onBack: () => void;
   onFeedClick: () => void;
@@ -33,6 +61,9 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
   const [profileUrls, setProfileUrls] = useState<ProfileUrl[]>([]);
   const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | null>(null);
   const [pendingTransactions, setPendingTransactions] = useState<PendingTransaction[]>([]);
+  const [timeActivities, setTimeActivities] = useState<TimeActivity[]>([]);
+  const [workBounties, setWorkBounties] = useState<WorkBounty[]>([]);
+  const [connections, setConnections] = useState<Connection[]>([]);
   const [isLoggingTime, setIsLoggingTime] = useState(false);
   const [isSignOutModalOpen, setIsSignOutModalOpen] = useState(false);
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
@@ -48,6 +79,9 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
   useEffect(() => {
     loadProfileData();
     loadPendingTransactions();
+    loadTimeActivities();
+    loadWorkBounties();
+    loadConnections();
   }, []);
 
   const loadProfileData = async () => {
@@ -103,6 +137,130 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
     }
   };
 
+  const loadTimeActivities = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Get recent time transactions for this user
+      const { data: transactions, error } = await supabase
+        .from('time_transactions')
+        .select(`
+          id,
+          hours,
+          description,
+          status,
+          created_at,
+          giver:profiles!time_transactions_giver_id_fkey(full_name, display_name),
+          receiver:profiles!time_transactions_receiver_id_fkey(full_name, display_name),
+          logged_by
+        `)
+        .or(`giver_id.in.(${await getUserProfileId(user.id)}),receiver_id.in.(${await getUserProfileId(user.id)})`)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (error) {
+        console.error('Error loading time activities:', error);
+        return;
+      }
+
+      const userProfileId = await getUserProfileId(user.id);
+      const activities: TimeActivity[] = (transactions || []).map(t => ({
+        id: t.id,
+        type: t.status === 'pending' ? 'pending' : (t.status === 'confirmed' ? 'confirmed' : 'logged'),
+        other_person: t.logged_by === userProfileId ? 
+          (t.giver?.full_name || t.giver?.display_name || 'Unknown') :
+          (t.receiver?.full_name || t.receiver?.display_name || 'Unknown'),
+        hours: t.hours,
+        description: t.description || '',
+        created_at: t.created_at,
+        status: t.status
+      }));
+
+      setTimeActivities(activities);
+    } catch (error) {
+      console.error('Error loading time activities:', error);
+    }
+  };
+
+  const loadWorkBounties = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const userProfileId = await getUserProfileId(user.id);
+      
+      const { data: bounties, error } = await supabase
+        .from('work_bounties')
+        .select('id, title, service_type, budget_range, applications_count, status, created_at')
+        .eq('posted_by', userProfileId)
+        .order('created_at', { ascending: false })
+        .limit(3);
+
+      if (error) {
+        console.error('Error loading work bounties:', error);
+        return;
+      }
+
+      setWorkBounties(bounties || []);
+    } catch (error) {
+      console.error('Error loading work bounties:', error);
+    }
+  };
+
+  const loadConnections = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const userProfileId = await getUserProfileId(user.id);
+      
+      // Get recent connections with time interaction data
+      const { data: connectionData, error } = await supabase
+        .from('connections')
+        .select(`
+          id,
+          requester:profiles!connections_requester_id_fkey(id, full_name, display_name, avatar_url),
+          recipient:profiles!connections_recipient_id_fkey(id, full_name, display_name, avatar_url),
+          created_at
+        `)
+        .or(`requester_id.eq.${userProfileId},recipient_id.eq.${userProfileId}`)
+        .eq('status', 'accepted')
+        .order('created_at', { ascending: false })
+        .limit(3);
+
+      if (error) {
+        console.error('Error loading connections:', error);
+        return;
+      }
+
+      // Mock some interaction data for now
+      const mockConnections: Connection[] = (connectionData || []).map((conn, index) => {
+        const otherPerson = conn.requester.id === userProfileId ? conn.recipient : conn.requester;
+        return {
+          id: conn.id,
+          name: otherPerson.full_name || otherPerson.display_name,
+          avatar_url: otherPerson.avatar_url,
+          last_interaction: new Date(Date.now() - (index + 1) * 24 * 60 * 60 * 1000).toISOString(),
+          total_hours: Math.floor(Math.random() * 10) + 1
+        };
+      });
+
+      setConnections(mockConnections);
+    } catch (error) {
+      console.error('Error loading connections:', error);
+    }
+  };
+
+  const getUserProfileId = async (userId: string): Promise<string> => {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('user_id', userId)
+      .single();
+    return data?.id || '';
+  };
+
   const handleTransactionAction = async (transactionId: string, action: 'confirmed' | 'disputed', disputeReason?: string) => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -125,6 +283,7 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
       if (result.success) {
         // Reload pending transactions
         await loadPendingTransactions();
+        await loadTimeActivities();
         
         // Reload profile to get updated time balance
         const { data: updatedProfile } = await supabase
@@ -178,10 +337,6 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
     }
   };
 
-  const isValidEmail = (email: string) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  };
-
   const handleLogTime = async () => {
     if (!profile) return;
 
@@ -219,13 +374,6 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
         alert('Time logged successfully! The other person will be notified to confirm.');
       } else {
         // User doesn't exist - create invitation and pending time log
-        if (!isValidEmail(timeLogForm.contact)) {
-          throw new Error('Please provide a valid email address for new users');
-        }
-
-        console.log('Creating invitation for new user:', timeLogForm.contact);
-
-        // Use the RPC function to create invitation and pending time log
         const { data: invitationData, error: invitationError } = await supabase
           .rpc('create_invitation_with_time_log', {
             p_inviter_profile_id: profile.id,
@@ -238,42 +386,7 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
             p_mode: timeLogForm.mode
           });
 
-        if (invitationError) {
-          console.error('RPC error:', invitationError);
-          throw invitationError;
-        }
-
-        if (!invitationData.success) {
-          console.error('RPC returned error:', invitationData.error);
-          throw new Error(invitationData.error || 'Failed to create invitation');
-        }
-
-        console.log('Invitation created successfully:', invitationData);
-
-        // Now send the actual email using our edge function
-        try {
-          const { data: emailResult, error: emailError } = await supabase.functions.invoke('send-invitation-email', {
-            body: {
-              invitee_email: timeLogForm.contact,
-              invitee_name: timeLogForm.name,
-              inviter_name: profile.full_name || profile.display_name || 'A Yard member',
-              hours: timeLogForm.hours,
-              mode: timeLogForm.mode,
-              invitation_token: invitationData.invitation_token || 'temp-token'
-            }
-          });
-
-          if (emailError) {
-            console.error('Email sending error:', emailError);
-            // Don't throw here - the invitation was created successfully
-            console.warn('Invitation created but email failed to send');
-          } else {
-            console.log('Email sent successfully:', emailResult);
-          }
-        } catch (emailError) {
-          console.error('Email function error:', emailError);
-          // Don't throw here - the invitation was created successfully
-        }
+        if (invitationError) throw invitationError;
 
         alert(`Invitation sent to ${timeLogForm.name}! They'll receive an email to join Yard and confirm the time log.`);
       }
@@ -289,13 +402,13 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
         description: ''
       });
       
+      // Reload data
+      await loadPendingTransactions();
+      await loadTimeActivities();
+      
     } catch (error) {
       console.error('Error logging time:', error);
-      if (error.message.includes('email')) {
-        alert('Please provide a valid email address for new users.');
-      } else {
-        alert('Error logging time. Please try again.');
-      }
+      alert('Error logging time. Please try again.');
     } finally {
       setIsLoggingTime(false);
     }
@@ -384,9 +497,6 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
           throw new Error('Please provide a valid email address for new users');
         }
 
-        console.log('Creating invitation for new user:', timeLoggingData.contact);
-
-        // Use the RPC function to create invitation and pending time log
         const { data: invitationData, error: invitationError } = await supabase
           .rpc('create_invitation_with_time_log', {
             p_inviter_profile_id: profile.id,
@@ -399,42 +509,7 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
             p_mode: timeLoggingData.mode
           });
 
-        if (invitationError) {
-          console.error('RPC error:', invitationError);
-          throw invitationError;
-        }
-
-        if (!invitationData.success) {
-          console.error('RPC returned error:', invitationData.error);
-          throw new Error(invitationData.error || 'Failed to create invitation');
-        }
-
-        console.log('Invitation created successfully:', invitationData);
-
-        // Now send the actual email using our edge function
-        try {
-          const { data: emailResult, error: emailError } = await supabase.functions.invoke('send-invitation-email', {
-            body: {
-              invitee_email: timeLoggingData.contact,
-              invitee_name: timeLoggingData.name,
-              inviter_name: profile.full_name || profile.display_name || 'A Yard member',
-              hours: timeLoggingData.hours,
-              mode: timeLoggingData.mode,
-              invitation_token: invitationData.invitation_token || 'temp-token'
-            }
-          });
-
-          if (emailError) {
-            console.error('Email sending error:', emailError);
-            // Don't throw here - the invitation was created successfully
-            console.warn('Invitation created but email failed to send');
-          } else {
-            console.log('Email sent successfully:', emailResult);
-          }
-        } catch (emailError) {
-          console.error('Email function error:', emailError);
-          // Don't throw here - the invitation was created successfully
-        }
+        if (invitationError) throw invitationError;
 
         alert(`Invitation sent to ${timeLoggingData.name}! They'll receive an email to join Yard and confirm the time log.`);
       }
@@ -442,13 +517,10 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
       setIsTimeLoggingOpen(false);
       // Reload pending transactions to show any new ones
       await loadPendingTransactions();
+      await loadTimeActivities();
     } catch (error) {
       console.error('Error logging time:', error);
-      if (error.message.includes('email')) {
-        alert('Please provide a valid email address for new users.');
-      } else {
-        alert('Error logging time. Please try again.');
-      }
+      alert('Error logging time. Please try again.');
     }
   };
 
@@ -470,6 +542,19 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
     const lastNudge = new Date(lastNudgedAt);
     const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
     return lastNudge < oneHourAgo;
+  };
+
+  const getInitials = (name: string) => {
+    return name.split(' ').map(n => n[0]).join('').toUpperCase();
+  };
+
+  const getAvatarColor = (name: string) => {
+    const colors = [
+      'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 
+      'bg-pink-500', 'bg-indigo-500', 'bg-red-500', 'bg-yellow-500'
+    ];
+    const index = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    return colors[index % colors.length];
   };
 
   return (
@@ -665,12 +750,6 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
                       className="w-full pl-4 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200 text-sm"
                     />
                   </div>
-                  <p className="text-xs text-gray-500 mt-1">
-                    {isValidEmail(timeLogForm.contact) 
-                      ? "We'll check if they're already on Yard or send an invitation"
-                      : "Please enter a valid email address"
-                    }
-                  </p>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -706,7 +785,7 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
                 </button>
                 <button
                   onClick={handleLogTime}
-                  disabled={isLoggingTime || !timeLogForm.contact.trim() || !timeLogForm.name.trim() || !isValidEmail(timeLogForm.contact)}
+                  disabled={isLoggingTime || !timeLogForm.contact.trim() || !timeLogForm.name.trim()}
                   className="px-6 py-3 bg-black text-white rounded-xl hover:bg-gray-800 transition-all duration-200 transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center gap-2"
                 >
                   {isLoggingTime ? (
@@ -765,17 +844,175 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
           </div>
         </div>
 
-        {/* Time Balance */}
-        <div className="bg-white rounded-3xl p-8 shadow-lg border border-amber-100">
-          <h2 className="text-xl font-bold text-gray-900 mb-6">Your Time Balance</h2>
-          <div className="text-center">
-            <div className="text-4xl font-bold text-gray-900 mb-2">
-              {profile?.time_balance_hours || '0.0'}
+        {/* New Dashboard Sections */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Personal Time Feed */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-amber-100">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-purple-100 p-2 rounded-full">
+                  <TrendingUp className="w-5 h-5 text-purple-700" />
+                </div>
+                <h3 className="font-semibold text-gray-900">Recent Activity</h3>
+              </div>
+              <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
+                View all
+              </button>
             </div>
-            <div className="text-gray-600">hours</div>
-            <p className="text-sm text-gray-500 mt-4">
-              Your time balance updates as you log time and complete transactions
-            </p>
+            
+            <div className="space-y-3">
+              {timeActivities.length > 0 ? (
+                timeActivities.map((activity) => (
+                  <div key={activity.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <div className={`w-2 h-2 rounded-full ${
+                      activity.type === 'confirmed' ? 'bg-green-500' : 
+                      activity.type === 'pending' ? 'bg-yellow-500' : 'bg-blue-500'
+                    }`} />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {activity.hours}h with {activity.other_person}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {activity.description || 'No description'} • {formatTimeAgo(activity.created_at)}
+                      </p>
+                    </div>
+                    <span className={`text-xs px-2 py-1 rounded-full ${
+                      activity.status === 'confirmed' ? 'bg-green-100 text-green-800' :
+                      activity.status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-blue-100 text-blue-800'
+                    }`}>
+                      {activity.status}
+                    </span>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-6">
+                  <Clock className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-gray-500 text-sm">No recent activity</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Time Balance Card */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-amber-100">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="bg-amber-100 p-2 rounded-full">
+                <Clock className="w-5 h-5 text-amber-700" />
+              </div>
+              <h3 className="font-semibold text-gray-900">Your Time Balance</h3>
+            </div>
+            
+            <div className="text-center">
+              <div className="text-4xl font-bold text-gray-900 mb-2">
+                {profile?.time_balance_hours || '0.0'}
+              </div>
+              <div className="text-gray-600 mb-4">hours</div>
+              
+              <div className="grid grid-cols-2 gap-4 text-center">
+                <div className="bg-green-50 rounded-lg p-3">
+                  <div className="text-lg font-semibold text-green-700">+12.5</div>
+                  <div className="text-xs text-green-600">Time Given</div>
+                </div>
+                <div className="bg-blue-50 rounded-lg p-3">
+                  <div className="text-lg font-semibold text-blue-700">-11.5</div>
+                  <div className="text-xs text-blue-600">Time Received</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+          {/* Work Bounties */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-amber-100">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-orange-100 p-2 rounded-full">
+                  <Award className="w-5 h-5 text-orange-700" />
+                </div>
+                <h3 className="font-semibold text-gray-900">Your Bounties</h3>
+              </div>
+              <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
+                View all
+              </button>
+            </div>
+            
+            <div className="space-y-3">
+              {workBounties.length > 0 ? (
+                workBounties.map((bounty) => (
+                  <div key={bounty.id} className="p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-start justify-between mb-2">
+                      <h4 className="font-medium text-gray-900 text-sm">{bounty.title}</h4>
+                      <span className={`text-xs px-2 py-1 rounded-full ${
+                        bounty.status === 'open' ? 'bg-green-100 text-green-800' :
+                        bounty.status === 'in_progress' ? 'bg-blue-100 text-blue-800' :
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {bounty.status}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs text-gray-500">
+                      <span>{bounty.service_type}</span>
+                      <span>{bounty.applications_count} applications</span>
+                    </div>
+                    {bounty.budget_range && (
+                      <div className="mt-2 text-xs text-gray-600">
+                        Budget: {bounty.budget_range}
+                      </div>
+                    )}
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-6">
+                  <Award className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-gray-500 text-sm">No bounties posted</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Connections */}
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-amber-100">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="bg-indigo-100 p-2 rounded-full">
+                  <Users className="w-5 h-5 text-indigo-700" />
+                </div>
+                <h3 className="font-semibold text-gray-900">Recent Connections</h3>
+              </div>
+              <button className="text-blue-600 hover:text-blue-700 text-sm font-medium">
+                View all
+              </button>
+            </div>
+            
+            <div className="space-y-3">
+              {connections.length > 0 ? (
+                connections.map((connection) => (
+                  <div key={connection.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-medium ${getAvatarColor(connection.name)}`}>
+                      {getInitials(connection.name)}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">
+                        {connection.name}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {connection.total_hours}h total • {formatTimeAgo(connection.last_interaction)}
+                      </p>
+                    </div>
+                    <button className="text-blue-600 hover:text-blue-700">
+                      <ExternalLink size={16} />
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-6">
+                  <Users className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-gray-500 text-sm">No connections yet</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
