@@ -1,5 +1,4 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
 import BrowseNetwork from '../components/BrowseNetwork';
 
 interface BrowseNetworkPageProps {
@@ -9,15 +8,13 @@ interface BrowseNetworkPageProps {
 }
 
 const BrowseNetworkPage = ({ isAuthenticated, onSignOut, onPromptSignIn }: BrowseNetworkPageProps) => {
-  const navigate = useNavigate();
-
   const handleBack = () => {
-    navigate('/');
+    window.location.href = '/';
   };
 
   const handleFeedClick = () => {
     if (isAuthenticated) {
-      navigate('/feed');
+      window.location.href = '/feed';
     } else {
       onPromptSignIn();
     }
@@ -25,7 +22,7 @@ const BrowseNetworkPage = ({ isAuthenticated, onSignOut, onPromptSignIn }: Brows
 
   const handleDashboardClick = () => {
     if (isAuthenticated) {
-      navigate('/dashboard');
+      window.location.href = '/dashboard';
     } else {
       onPromptSignIn();
     }

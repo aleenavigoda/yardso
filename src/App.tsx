@@ -165,10 +165,6 @@ function AppContent() {
     try {
       console.log('Handling auth success for user:', user.id);
       
-      // Close any open modals immediately
-      setIsSignInOpen(false);
-      setIsSignUpOpen(false);
-      
       // First, check localStorage for existing profile
       const storedProfile = localStorage.getItem('userProfile');
       if (storedProfile) {
@@ -191,8 +187,6 @@ function AppContent() {
               }
             }
             
-            // Navigate to dashboard after successful auth
-            navigate('/dashboard');
             return; // Exit early with cached data
           }
         } catch (e) {
@@ -258,9 +252,6 @@ function AppContent() {
         }
       }
       
-      // Navigate to dashboard after successful auth
-      navigate('/dashboard');
-      
       console.log('Auth success completed successfully');
     } catch (error: any) {
       console.error('Error in handleAuthSuccess:', error);
@@ -276,9 +267,6 @@ function AppContent() {
       localStorage.setItem('userProfile', JSON.stringify(basicProfile));
       setUserProfile(basicProfile);
       setIsAuthenticated(true);
-      
-      // Navigate to dashboard even if there were profile errors
-      navigate('/dashboard');
     }
   };
 
@@ -305,7 +293,7 @@ function AppContent() {
       // Always clear auth state regardless of server response
       clearAuthState();
       // Navigate to home after sign out
-      navigate('/');
+      window.location.href = '/';
     }
   };
 
@@ -314,9 +302,10 @@ function AppContent() {
   };
 
   const handleSignInSuccess = () => {
-    // The modal will be closed in handleAuthSuccess
-    // handleAuthSuccess will be called by the auth state change listener
-    // and will handle navigation to dashboard
+    // Close modal immediately
+    setIsSignInOpen(false);
+    // Navigate to dashboard
+    window.location.href = '/dashboard';
   };
 
   // Simplified auth initialization with shorter timeout and better error handling
@@ -332,9 +321,7 @@ function AppContent() {
         
         if (event === 'SIGNED_IN' && session?.user) {
           console.log('Handling auth success for user:', session.user.id);
-          handleAuthSuccess(session.user).catch(error => {
-            console.error('Auth state change handler failed:', error);
-          });
+          await handleAuthSuccess(session.user);
         } else if (event === 'SIGNED_OUT') {
           clearAuthState();
         }
@@ -452,8 +439,8 @@ function AppContent() {
           element={
             <ProtectedRoute isAuthenticated={isAuthenticated}>
               <Feed 
-                onBack={() => navigate('/')} 
-                onDashboardClick={() => navigate('/dashboard')}
+                onBack={() => window.location.href = '/'} 
+                onDashboardClick={() => window.location.href = '/dashboard'}
                 onSignOut={handleSignOut}
               />
             </ProtectedRoute>
@@ -464,9 +451,9 @@ function AppContent() {
           element={
             <ProtectedRoute isAuthenticated={isAuthenticated}>
               <Dashboard 
-                onBack={() => navigate('/')} 
-                onFeedClick={() => navigate('/feed')}
-                onBrowseNetworkClick={() => navigate('/browse')}
+                onBack={() => window.location.href = '/'} 
+                onFeedClick={() => window.location.href = '/feed'}
+                onBrowseNetworkClick={() => window.location.href = '/browse'}
               />
             </ProtectedRoute>
           } 
