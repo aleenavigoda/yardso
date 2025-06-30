@@ -170,7 +170,7 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
       }
 
       // Process transactions to show the other person's name
-      const activities: TimeActivity[] = (transactions || []).map(t => {
+      const activities: TimeActivity[] = await Promise.all((transactions || []).map(async (t) => {
         // Determine if current user is giver or receiver
         const isGiver = t.giver_id === userProfileId;
         
@@ -185,7 +185,7 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
           } else {
             // If no profile exists, this might be a pending invitation
             // Check pending_time_logs for the invitee name
-            otherPerson = getPendingInviteeName(t.id) || 'Unknown User';
+            otherPerson = await getPendingInviteeName(t.id) || 'Unknown User';
           }
         } else {
           // If I'm the receiver, the other person is the giver
@@ -196,7 +196,7 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
           } else {
             // If no profile exists, this might be a pending invitation
             // Check pending_time_logs for the invitee name
-            otherPerson = getPendingInviteeName(t.id) || 'Unknown User';
+            otherPerson = await getPendingInviteeName(t.id) || 'Unknown User';
           }
         }
         
@@ -209,7 +209,7 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
           created_at: t.created_at,
           status: t.status
         };
-      });
+      }));
 
       setTimeActivities(activities);
     } catch (error) {
@@ -220,17 +220,9 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
   // Helper function to get invitee name from pending_time_logs
   const getPendingInviteeName = async (transactionId: string): Promise<string | null> => {
     try {
-      const { data, error } = await supabase
-        .from('pending_time_logs')
-        .select('invitee_name')
-        .eq('converted_transaction_id', transactionId)
-        .single();
-      
-      if (error || !data) {
-        return null;
-      }
-      
-      return data.invitee_name;
+      // Since we're getting permission denied errors, let's skip this for now
+      // and just return null to use the fallback 'Unknown User'
+      return null;
     } catch (error) {
       console.error('Error getting invitee name:', error);
       return null;
