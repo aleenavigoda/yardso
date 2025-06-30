@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
-import MainApp from './pages/MainApp';
-import BrowseNetwork from './components/BrowseNetwork';
+import BrowseNetworkPage from './pages/BrowseNetworkPage';
 import Feed from './components/Feed';
 import Dashboard from './components/Dashboard';
 import InviteSignUpPage from './components/InviteSignUpPage';
+import ProtectedRoute from './components/ProtectedRoute';
+import SignInModal from './components/SignInModal';
 import { supabase } from './lib/supabase';
 import type { TimeLoggingData } from './types';
 
@@ -293,6 +294,14 @@ function App() {
     }
   };
 
+  const handlePromptSignIn = () => {
+    setIsSignInOpen(true);
+  };
+
+  const handleSignInSuccess = () => {
+    setIsSignInOpen(false);
+  };
+
   // Simplified auth initialization with shorter timeout and better error handling
   useEffect(() => {
     let isMounted = true;
@@ -414,56 +423,45 @@ function App() {
         <Route 
           path="/browse" 
           element={
-            <BrowseNetwork 
-              onBack={() => window.location.href = '/'}
-              onFeedClick={() => window.location.href = '/feed'}
-              onDashboardClick={() => window.location.href = '/dashboard'}
-              onSignOut={handleSignOut}
+            <BrowseNetworkPage 
               isAuthenticated={isAuthenticated}
-              onPromptSignIn={() => setIsSignInOpen(true)}
+              onSignOut={handleSignOut}
+              onPromptSignIn={handlePromptSignIn}
             />
           } 
         />
         <Route 
           path="/feed" 
           element={
-            <Feed 
-              onBack={() => window.location.href = '/'} 
-              onDashboardClick={() => window.location.href = '/dashboard'}
-              onSignOut={handleSignOut}
-            />
+            <ProtectedRoute isAuthenticated={isAuthenticated}>
+              <Feed 
+                onBack={() => window.location.href = '/'} 
+                onDashboardClick={() => window.location.href = '/dashboard'}
+                onSignOut={handleSignOut}
+              />
+            </ProtectedRoute>
           } 
         />
         <Route 
           path="/dashboard" 
           element={
-            <Dashboard 
-              onBack={() => window.location.href = '/'} 
-              onFeedClick={() => window.location.href = '/feed'}
-              onBrowseNetworkClick={() => window.location.href = '/browse'}
-            />
-          } 
-        />
-        <Route 
-          path="/*" 
-          element={
-            <MainApp 
-              isAuthenticated={isAuthenticated}
-              userProfile={userProfile}
-              isTimeLoggingOpen={isTimeLoggingOpen}
-              setIsTimeLoggingOpen={setIsTimeLoggingOpen}
-              isSignUpOpen={isSignUpOpen}
-              setIsSignUpOpen={setIsSignUpOpen}
-              isSignInOpen={isSignInOpen}
-              setIsSignInOpen={setIsSignInOpen}
-              pendingTimeLog={pendingTimeLog}
-              setPendingTimeLog={setPendingTimeLog}
-              onAuthSuccess={handleAuthSuccess}
-              onSignOut={handleSignOut}
-            />
+            <ProtectedRoute isAuthenticated={isAuthenticated}>
+              <Dashboard 
+                onBack={() => window.location.href = '/'} 
+                onFeedClick={() => window.location.href = '/feed'}
+                onBrowseNetworkClick={() => window.location.href = '/browse'}
+              />
+            </ProtectedRoute>
           } 
         />
       </Routes>
+
+      {/* Global Sign In Modal */}
+      <SignInModal
+        isOpen={isSignInOpen}
+        onClose={() => setIsSignInOpen(false)}
+        onSignInSuccess={handleSignInSuccess}
+      />
     </Router>
   );
 }

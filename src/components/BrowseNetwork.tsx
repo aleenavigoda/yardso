@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Filter, MapPin, Users, ChevronDown, X, DollarSign, Calendar, Target, CheckCircle, ExternalLink, Github, Linkedin, Twitter, Globe, Bot, UserCheck, MessageCircle, Loader2 } from 'lucide-react';
+import { Search, Filter, MapPin, Users, ChevronDown, X, DollarSign, Calendar, Target, CheckCircle, ExternalLink, Github, Linkedin, Twitter, Globe, Bot, UserCheck, MessageCircle, Loader2, UserPlus, LogIn, Home, BarChart3, LogOut } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useSearchParams } from 'react-router-dom';
-import AuthenticatedHeader from './AuthenticatedHeader';
 import ProfileModal from './ProfileModal';
 
 interface NetworkUser {
@@ -603,13 +602,72 @@ const BrowseNetwork = ({
     <div className="min-h-screen w-full bg-amber-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         {/* Header */}
-        <AuthenticatedHeader
-          currentPage="main"
-          onFeedClick={onFeedClick}
-          onDashboardClick={onDashboardClick}
-          onSignOut={onSignOut}
-          onHomeClick={onBack}
-        />
+        <header className="flex justify-between items-center mb-8">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={onBack}
+              className="text-2xl font-bold text-black italic hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
+            >
+              yard
+            </button>
+          </div>
+          <nav>
+            <ul className="flex gap-6 items-center">
+              {isAuthenticated ? (
+                <>
+                  <li>
+                    <button 
+                      onClick={onFeedClick}
+                      className="flex items-center gap-2 text-black hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
+                    >
+                      <Home size={16} />
+                      <span className="hidden sm:inline">feed</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button 
+                      onClick={onDashboardClick}
+                      className="flex items-center gap-2 text-black hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
+                    >
+                      <BarChart3 size={16} />
+                      <span className="hidden sm:inline">dashboard</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button
+                      onClick={onSignOut}
+                      className="flex items-center gap-2 text-black hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
+                    >
+                      <LogOut size={16} />
+                      <span className="hidden sm:inline">sign out</span>
+                    </button>
+                  </li>
+                </>
+              ) : (
+                <>
+                  <li>
+                    <button 
+                      onClick={onPromptSignIn}
+                      className="flex items-center gap-2 text-black hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
+                    >
+                      <UserPlus size={16} />
+                      <span className="hidden sm:inline">sign up</span>
+                    </button>
+                  </li>
+                  <li>
+                    <button 
+                      onClick={onPromptSignIn}
+                      className="flex items-center gap-2 text-black hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
+                    >
+                      <LogIn size={16} />
+                      <span className="hidden sm:inline">sign in</span>
+                    </button>
+                  </li>
+                </>
+              )}
+            </ul>
+          </nav>
+        </header>
 
         {/* Page Title */}
         <div className="mb-8">
