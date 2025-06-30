@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import Header from '../components/Header';
 import Hero from '../components/Hero';
 import SearchForm from '../components/SearchForm';
@@ -8,82 +8,40 @@ import TimeLoggingBanner from '../components/TimeLoggingBanner';
 import TimeLoggingModal from '../components/TimeLoggingModal';
 import SignUpModal from '../components/SignUpModal';
 import SignInModal from '../components/SignInModal';
-import { supabase } from '../lib/supabase';
+import { useNavigate } from 'react-router-dom';
 import type { TimeLoggingData } from '../types';
 
-const LandingPage = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userProfile, setUserProfile] = useState<any>(null);
-  const [isInitializing, setIsInitializing] = useState(true);
-  const [isTimeLoggingOpen, setIsTimeLoggingOpen] = useState(false);
-  const [isSignUpOpen, setIsSignUpOpen] = useState(false);
-  const [isSignInOpen, setIsSignInOpen] = useState(false);
-  const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | undefined>();
-  const [searchValue, setSearchValue] = useState('');
+interface LandingPageProps {
+  isAuthenticated: boolean;
+  userProfile: any;
+  isTimeLoggingOpen: boolean;
+  setIsTimeLoggingOpen: (open: boolean) => void;
+  isSignUpOpen: boolean;
+  setIsSignUpOpen: (open: boolean) => void;
+  isSignInOpen: boolean;
+  setIsSignInOpen: (open: boolean) => void;
+  pendingTimeLog?: TimeLoggingData;
+  setPendingTimeLog: (data: TimeLoggingData | undefined) => void;
+  onAuthSuccess: (user: any) => void;
+  onSignOut: () => void;
+}
 
-  // Check URL parameters for auto-opening modals
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    if (urlParams.get('signin') === 'true') {
-      setIsSignInOpen(true);
-      // Clean up URL
-      window.history.replaceState({}, '', window.location.pathname);
-    }
-  }, []);
-
-  useEffect(() => {
-    initAuth();
-  }, []);
-
-  const initAuth = async () => {
-    try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      
-      if (error) {
-        console.error('Auth session error:', error);
-        setIsInitializing(false);
-        return;
-      }
-      
-      if (session?.user) {
-        await handleAuthSuccess(session.user);
-      }
-      
-      setIsInitializing(false);
-    } catch (error) {
-      console.error('Auth initialization error:', error);
-      setIsInitializing(false);
-    }
-  };
-
-  const handleAuthSuccess = async (user: any) => {
-    try {
-      // Get or create profile
-      const { data: profile, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-
-      if (profile) {
-        setUserProfile(profile);
-        setIsAuthenticated(true);
-      }
-    } catch (error) {
-      console.error('Error handling auth success:', error);
-    }
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await supabase.auth.signOut();
-      setIsAuthenticated(false);
-      setUserProfile(null);
-      window.location.href = '/';
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
-  };
+const LandingPage = ({
+  isAuthenticated,
+  userProfile,
+  isTimeLoggingOpen,
+  setIsTimeLoggingOpen,
+  isSignUpOpen,
+  setIsSignUpOpen,
+  isSignInOpen,
+  setIsSignInOpen,
+  pendingTimeLog,
+  setPendingTimeLog,
+  onAuthSuccess,
+  onSignOut
+}: LandingPageProps) => {
+  const navigate = useNavigate();
+  const [searchValue, setSearchValue] = React.useState('');
 
   const handleTimeLoggingSignUp = (timeLoggingData: TimeLoggingData) => {
     setPendingTimeLog(timeLoggingData);
@@ -91,15 +49,20 @@ const LandingPage = () => {
     setIsSignUpOpen(true);
   };
 
+  const handleTimeLoggingDirect = async (timeLoggingData: TimeLoggingData) => {
+    // This would be handled by the time logging modal
+    setIsTimeLoggingOpen(false);
+  };
+
   const handleSignUpSuccess = () => {
     setIsSignUpOpen(false);
     setPendingTimeLog(undefined);
-    window.location.href = '/dashboard';
+    navigate('/dashboard');
   };
 
   const handleSignInSuccess = () => {
     setIsSignInOpen(false);
-    window.location.href = '/dashboard';
+    navigate('/dashboard');
   };
 
   const handleSubmitRequest = (searchParams: any) => {
@@ -107,20 +70,8 @@ const LandingPage = () => {
     Object.entries(searchParams).forEach(([key, value]) => {
       if (value) params.append(key, value as string);
     });
-    window.location.href = `/browse?${params.toString()}`;
+    navigate(`/browse?${params.toString()}`);
   };
-
-  if (isInitializing) {
-    return (
-      <div className="min-h-screen w-full bg-amber-200 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-2xl font-bold text-black italic mb-4">yard</div>
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-black mx-auto"></div>
-          <div className="text-sm text-gray-600 mt-4">Loading your workyard...</div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen w-full bg-amber-200">
@@ -132,13 +83,17 @@ const LandingPage = () => {
           showFeed={false}
           onSignUpSuccess={() => setIsSignUpOpen(true)}
           onSignInSuccess={() => setIsSignInOpen(true)}
-          onDashboardClick={() => window.location.href = '/dashboard'}
-          onFeedClick={() => window.location.href = '/feed'}
-          onSignOut={handleSignOut}
+          onDashboardClick={() => navigate('/dashboard')}
+          onFeedClick={() => navigate('/feed')}
+          onSignOut={onSignOut}
         />
         <main className="mt-16 md:mt-24">
+          {/* Only show Hero section if not authenticated */}
           {!isAuthenticated && <Hero />}
+          
+          {/* Show time logging banner for both authenticated and non-authenticated users */}
           <TimeLoggingBanner onLogTime={() => setIsTimeLoggingOpen(true)} />
+          
           <SearchForm
             searchValue={searchValue}
             setSearchValue={setSearchValue}
@@ -153,6 +108,7 @@ const LandingPage = () => {
         isOpen={isTimeLoggingOpen}
         onClose={() => setIsTimeLoggingOpen(false)}
         onSignUp={handleTimeLoggingSignUp}
+        onLogTime={handleTimeLoggingDirect}
         isAuthenticated={isAuthenticated}
       />
       
