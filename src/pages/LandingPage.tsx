@@ -74,7 +74,7 @@ const LandingPage = ({
   };
 
   return (
-    <div className="min-h-screen w-full bg-amber-200">
+    <div className="min-h-screen w-full bg-amber-200 relative">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         <Header 
           isAuthenticated={isAuthenticated}
@@ -103,6 +103,25 @@ const LandingPage = ({
         </main>
         <Footer />
       </div>
+
+      {/* Powered by Bolt logo - only show for logged out users */}
+      {!isAuthenticated && (
+        <div className="fixed bottom-6 right-6 z-40">
+          <a
+            href="https://bolt.new"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block hover:scale-105 transition-transform duration-200"
+            title="Powered by Bolt"
+          >
+            <img
+              src="/white_circle_360x360.png"
+              alt="Powered by Bolt"
+              className="w-12 h-12 opacity-80 hover:opacity-100 transition-opacity duration-200"
+            />
+          </a>
+        </div>
+      )}
       
       <TimeLoggingModal
         isOpen={isTimeLoggingOpen}
