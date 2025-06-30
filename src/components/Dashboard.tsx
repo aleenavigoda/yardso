@@ -142,6 +142,9 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // Get user's profile ID
+      const userProfileId = await getUserProfileId(user.id);
+      
       // Get recent time transactions for this user
       const { data: transactions, error } = await supabase
         .from('time_transactions')
@@ -151,11 +154,13 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
           description,
           status,
           created_at,
-          giver:profiles!time_transactions_giver_id_fkey(full_name, display_name),
-          receiver:profiles!time_transactions_receiver_id_fkey(full_name, display_name),
+          giver_id,
+          receiver_id,
+          giver:profiles!time_transactions_giver_id_fkey(id, full_name, display_name),
+          receiver:profiles!time_transactions_receiver_id_fkey(id, full_name, display_name),
           logged_by
         `)
-        .or(`giver_id.in.(${await getUserProfileId(user.id)}),receiver_id.in.(${await getUserProfileId(user.id)})`)
+        .or(`giver_id.eq.${userProfileId},receiver_id.eq.${userProfileId}`)
         .order('created_at', { ascending: false })
         .limit(5);
 
@@ -164,18 +169,26 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
         return;
       }
 
-      const userProfileId = await getUserProfileId(user.id);
-      const activities: TimeActivity[] = (transactions || []).map(t => ({
-        id: t.id,
-        type: t.status === 'pending' ? 'pending' : (t.status === 'confirmed' ? 'confirmed' : 'logged'),
-        other_person: t.logged_by === userProfileId ? 
-          (t.giver?.full_name || t.giver?.display_name || 'Unknown') :
-          (t.receiver?.full_name || t.receiver?.display_name || 'Unknown'),
-        hours: t.hours,
-        description: t.description || '',
-        created_at: t.created_at,
-        status: t.status
-      }));
+      // Process transactions to show the other person's name
+      const activities: TimeActivity[] = (transactions || []).map(t => {
+        // Determine if current user is giver or receiver
+        const isGiver = t.giver_id === userProfileId;
+        
+        // Get the other person's name
+        const otherPerson = isGiver 
+          ? (t.receiver?.full_name || t.receiver?.display_name || 'Unknown User')
+          : (t.giver?.full_name || t.giver?.display_name || 'Unknown User');
+        
+        return {
+          id: t.id,
+          type: t.status === 'pending' ? 'pending' : (t.status === 'confirmed' ? 'confirmed' : 'logged'),
+          other_person: otherPerson,
+          hours: t.hours,
+          description: t.description || '',
+          created_at: t.created_at,
+          status: t.status
+        };
+      });
 
       setTimeActivities(activities);
     } catch (error) {
@@ -215,38 +228,64 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
 
       const userProfileId = await getUserProfileId(user.id);
       
-      // Get recent connections with time interaction data
-      const { data: connectionData, error } = await supabase
-        .from('connections')
+      // Get all users who have had time transactions with the current user
+      const { data: transactionPartners, error } = await supabase
+        .from('time_transactions')
         .select(`
           id,
-          requester:profiles!connections_requester_id_fkey(id, full_name, display_name, avatar_url),
-          recipient:profiles!connections_recipient_id_fkey(id, full_name, display_name, avatar_url),
-          created_at
+          giver:profiles!time_transactions_giver_id_fkey(id, full_name, display_name, avatar_url),
+          receiver:profiles!time_transactions_receiver_id_fkey(id, full_name, display_name, avatar_url),
+          created_at,
+          hours
         `)
-        .or(`requester_id.eq.${userProfileId},recipient_id.eq.${userProfileId}`)
-        .eq('status', 'accepted')
-        .order('created_at', { ascending: false })
-        .limit(3);
+        .or(`giver_id.eq.${userProfileId},receiver_id.eq.${userProfileId}`)
+        .eq('status', 'confirmed')
+        .order('created_at', { ascending: false });
 
       if (error) {
-        console.error('Error loading connections:', error);
+        console.error('Error loading transaction partners:', error);
         return;
       }
 
-      // Mock some interaction data for now
-      const mockConnections: Connection[] = (connectionData || []).map((conn, index) => {
-        const otherPerson = conn.requester.id === userProfileId ? conn.recipient : conn.requester;
-        return {
-          id: conn.id,
-          name: otherPerson.full_name || otherPerson.display_name,
-          avatar_url: otherPerson.avatar_url,
-          last_interaction: new Date(Date.now() - (index + 1) * 24 * 60 * 60 * 1000).toISOString(),
-          total_hours: Math.floor(Math.random() * 10) + 1
-        };
+      // Process transaction partners into connections
+      const connectionMap = new Map<string, Connection>();
+      
+      (transactionPartners || []).forEach(transaction => {
+        // Determine if current user is giver or receiver
+        const isGiver = transaction.giver.id === userProfileId;
+        
+        // Get the other person's details
+        const otherPerson = isGiver ? transaction.receiver : transaction.giver;
+        const otherPersonId = otherPerson.id;
+        
+        if (!connectionMap.has(otherPersonId)) {
+          connectionMap.set(otherPersonId, {
+            id: otherPersonId,
+            name: otherPerson.full_name || otherPerson.display_name || 'Unknown User',
+            avatar_url: otherPerson.avatar_url,
+            last_interaction: transaction.created_at,
+            total_hours: transaction.hours
+          });
+        } else {
+          // Update existing connection
+          const existing = connectionMap.get(otherPersonId)!;
+          connectionMap.set(otherPersonId, {
+            ...existing,
+            total_hours: existing.total_hours + transaction.hours,
+            // Update last_interaction if this transaction is more recent
+            last_interaction: new Date(transaction.created_at) > new Date(existing.last_interaction) 
+              ? transaction.created_at 
+              : existing.last_interaction
+          });
+        }
       });
 
-      setConnections(mockConnections);
+      // Convert map to array and sort by most recent interaction
+      const connectionsList = Array.from(connectionMap.values())
+        .sort((a, b) => new Date(b.last_interaction).getTime() - new Date(a.last_interaction).getTime())
+        .slice(0, 3); // Take top 3
+
+      setConnections(connectionsList);
     } catch (error) {
       console.error('Error loading connections:', error);
     }
@@ -284,6 +323,7 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
         // Reload pending transactions
         await loadPendingTransactions();
         await loadTimeActivities();
+        await loadConnections();
         
         // Reload profile to get updated time balance
         const { data: updatedProfile } = await supabase
@@ -375,20 +415,18 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
       } else {
         // User doesn't exist - create invitation and pending time log
         const { data: invitationData, error: invitationError } = await supabase
-          .rpc('create_invitation_with_time_log', {
+          .rpc('create_simple_invitation', {
             p_inviter_profile_id: profile.id,
             p_invitee_email: timeLogForm.contact,
             p_invitee_name: timeLogForm.name,
-            p_invitee_contact: timeLogForm.contact,
             p_hours: timeLogForm.hours,
             p_description: timeLogForm.description,
-            p_service_type: 'general',
             p_mode: timeLogForm.mode
           });
 
         if (invitationError) throw invitationError;
 
-        alert(`Invitation sent to ${timeLogForm.name}! They'll receive an email to join Yard and confirm the time log.`);
+        alert(`Invitation created for ${timeLogForm.name}! Share the invitation link with them to join Yard and confirm the time log.`);
       }
 
       // Clear the pending time log
@@ -405,6 +443,7 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
       // Reload data
       await loadPendingTransactions();
       await loadTimeActivities();
+      await loadConnections();
       
     } catch (error) {
       console.error('Error logging time:', error);
@@ -492,32 +531,36 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
 
         alert('Time logged successfully! The other person will be notified to confirm.');
       } else {
-        // User doesn't exist - create invitation and pending time log
+        // User doesn't exist - create invitation with shareable link
         if (!isValidEmail(timeLoggingData.contact)) {
           throw new Error('Please provide a valid email address for new users');
         }
 
         const { data: invitationData, error: invitationError } = await supabase
-          .rpc('create_invitation_with_time_log', {
+          .rpc('create_simple_invitation', {
             p_inviter_profile_id: profile.id,
             p_invitee_email: timeLoggingData.contact,
             p_invitee_name: timeLoggingData.name,
-            p_invitee_contact: timeLoggingData.contact,
             p_hours: timeLoggingData.hours,
             p_description: timeLoggingData.description,
-            p_service_type: 'general',
             p_mode: timeLoggingData.mode
           });
 
         if (invitationError) throw invitationError;
 
-        alert(`Invitation sent to ${timeLoggingData.name}! They'll receive an email to join Yard and confirm the time log.`);
+        // Generate the invitation link
+        const baseUrl = window.location.origin;
+        const inviteUrl = `${baseUrl}/invite/${invitationData.invitation_token}`;
+        
+        // Show the invitation link to the user
+        alert(`Invitation created for ${timeLoggingData.name}! Share this link with them to join Yard and confirm the time log: ${inviteUrl}`);
       }
 
       setIsTimeLoggingOpen(false);
-      // Reload pending transactions to show any new ones
+      // Reload data
       await loadPendingTransactions();
       await loadTimeActivities();
+      await loadConnections();
     } catch (error) {
       console.error('Error logging time:', error);
       alert('Error logging time. Please try again.');
