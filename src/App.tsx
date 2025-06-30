@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Header from './components/Header';
 import Hero from './components/Hero';
 import SearchForm from './components/SearchForm';
@@ -8,9 +7,6 @@ import Footer from './components/Footer';
 import TimeLoggingBanner from './components/TimeLoggingBanner';
 import TimeLoggingModal from './components/TimeLoggingModal';
 import SignUpModal from './components/SignUpModal';
-import Dashboard from './components/Dashboard';
-import Feed from './components/Feed';
-import BrowseNetwork from './components/BrowseNetwork';
 import InviteSignUpPage from './components/InviteSignUpPage';
 import { supabase } from './lib/supabase';
 import type { TimeLoggingData } from './types';
@@ -25,18 +21,21 @@ interface SearchParams {
   companyStage: string;
 }
 
-function MainApp() {
+function App() {
   const [searchValue, setSearchValue] = useState('');
   const [isTimeLoggingOpen, setIsTimeLoggingOpen] = useState(false);
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
-  const [showDashboard, setShowDashboard] = useState(false);
-  const [showFeed, setShowFeed] = useState(false);
-  const [showBrowseNetwork, setShowBrowseNetwork] = useState(false);
-  const [browseNetworkParams, setBrowseNetworkParams] = useState<SearchParams | undefined>();
   const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | undefined>();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [isInitializing, setIsInitializing] = useState(true);
+
+  // Check if this is an invite page
+  const isInvitePage = window.location.pathname.startsWith('/invite/');
+  
+  if (isInvitePage) {
+    return <InviteSignUpPage />;
+  }
 
   const detectUrlType = (url: string): string => {
     if (url.includes('github.com')) return 'github';
@@ -200,9 +199,9 @@ function MainApp() {
               }
             }
             
-            // AUTOMATICALLY REDIRECT TO DASHBOARD
-            setShowDashboard(true);
-            return; // Exit early with cached data
+            // REDIRECT TO DASHBOARD
+            window.location.href = '/dashboard.html';
+            return;
           }
         } catch (e) {
           console.error('Error parsing stored profile:', e);
@@ -267,8 +266,8 @@ function MainApp() {
         }
       }
       
-      // AUTOMATICALLY REDIRECT TO DASHBOARD
-      setShowDashboard(true);
+      // REDIRECT TO DASHBOARD
+      window.location.href = '/dashboard.html';
       
       console.log('Auth success completed successfully');
     } catch (error: any) {
@@ -286,18 +285,14 @@ function MainApp() {
       setUserProfile(basicProfile);
       setIsAuthenticated(true);
       
-      // AUTOMATICALLY REDIRECT TO DASHBOARD EVEN ON ERROR
-      setShowDashboard(true);
+      // REDIRECT TO DASHBOARD EVEN ON ERROR
+      window.location.href = '/dashboard.html';
     }
   };
 
   const clearAuthState = () => {
     localStorage.removeItem('userProfile');
     localStorage.removeItem('pendingTimeLog');
-    setShowDashboard(false);
-    setShowFeed(false);
-    setShowBrowseNetwork(false);
-    setBrowseNetworkParams(undefined);
     setPendingTimeLog(undefined);
     setIsAuthenticated(false);
     setUserProfile(null);
@@ -450,64 +445,37 @@ function MainApp() {
   const handleSignUpSuccess = () => {
     setIsSignUpOpen(false);
     setPendingTimeLog(undefined);
-    setShowDashboard(true);
+    window.location.href = '/dashboard.html';
   };
 
   const handleSignUpClose = () => {
     setIsSignUpOpen(false);
   };
 
-  const handleBackToHome = () => {
-    setShowDashboard(false);
-    setShowFeed(false);
-    setShowBrowseNetwork(false);
-    setBrowseNetworkParams(undefined);
-  };
-
   const handleHeaderSignUpSuccess = () => {
-    setShowDashboard(true);
+    window.location.href = '/dashboard.html';
   };
 
   const handleHeaderSignInSuccess = () => {
-    setShowDashboard(true);
-  };
-
-  const handleDashboardClick = () => {
-    setShowDashboard(true);
-    setShowFeed(false);
-    setShowBrowseNetwork(false);
-    setBrowseNetworkParams(undefined);
-  };
-
-  const handleFeedClick = () => {
-    setShowFeed(true);
-    setShowDashboard(false);
-    setShowBrowseNetwork(false);
-    setBrowseNetworkParams(undefined);
-  };
-
-  const handleBrowseNetworkClick = () => {
-    setShowBrowseNetwork(true);
-    setShowDashboard(false);
-    setShowFeed(false);
-    setBrowseNetworkParams(undefined);
+    window.location.href = '/dashboard.html';
   };
 
   const handleSubmitRequest = (searchParams: SearchParams) => {
-    setBrowseNetworkParams(searchParams);
-    setShowBrowseNetwork(true);
-    setShowDashboard(false);
-    setShowFeed(false);
+    // Store search params and redirect to browse page
+    localStorage.setItem('browseNetworkParams', JSON.stringify(searchParams));
+    window.location.href = '/browse.html';
   };
 
   const handleSignOut = async () => {
     try {
       await supabase.auth.signOut();
       clearAuthState();
+      window.location.href = '/';
     } catch (error) {
       console.error('Error signing out:', error);
       // Still clear state even if signOut fails
       clearAuthState();
+      window.location.href = '/';
     }
   };
 
@@ -524,58 +492,23 @@ function MainApp() {
     );
   }
 
-  // Show browse network if user wants to see it
-  if (showBrowseNetwork) {
-    return (
-      <BrowseNetwork 
-        onBack={handleBackToHome}
-        onFeedClick={handleFeedClick}
-        onDashboardClick={handleDashboardClick}
-        onSignOut={handleSignOut}
-        searchParams={browseNetworkParams}
-      />
-    );
-  }
-
-  // Show feed if user is authenticated and wants to see it
-  if (showFeed && isAuthenticated) {
-    return (
-      <Feed 
-        onBack={handleBackToHome} 
-        onDashboardClick={handleDashboardClick}
-        onSignOut={handleSignOut}
-      />
-    );
-  }
-
-  // Show dashboard if user is authenticated and wants to see it
-  if (showDashboard && isAuthenticated) {
-    return (
-      <Dashboard 
-        onBack={handleBackToHome} 
-        onFeedClick={handleFeedClick}
-        onBrowseNetworkClick={handleBrowseNetworkClick}
-      />
-    );
-  }
-
   return (
     <div className="min-h-screen w-full bg-amber-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         <Header 
           isAuthenticated={isAuthenticated}
           userProfile={userProfile}
-          showDashboard={showDashboard}
-          showFeed={showFeed}
+          showDashboard={false}
+          showFeed={false}
           onSignUpSuccess={handleHeaderSignUpSuccess}
           onSignInSuccess={handleHeaderSignInSuccess}
-          onDashboardClick={handleDashboardClick}
-          onFeedClick={handleFeedClick}
+          onDashboardClick={() => window.location.href = '/dashboard.html'}
+          onFeedClick={() => window.location.href = '/feed.html'}
           onSignOut={handleSignOut}
         />
         <main className="mt-16 md:mt-24">
-          {/* Only show Hero section if not authenticated */}
-          {!isAuthenticated && <Hero />}
+          {/* Only show Hero section on landing page */}
+          <Hero />
           
           {/* Show time logging banner for both authenticated and non-authenticated users */}
           <TimeLoggingBanner onLogTime={() => setIsTimeLoggingOpen(true)} />
@@ -605,17 +538,6 @@ function MainApp() {
         onSignUpSuccess={handleSignUpSuccess}
       />
     </div>
-  );
-}
-
-function App() {
-  return (
-    <Router>
-      <Routes>
-        <Route path="/invite/:token" element={<InviteSignUpPage />} />
-        <Route path="/*" element={<MainApp />} />
-      </Routes>
-    </Router>
   );
 }
 
