@@ -148,18 +148,23 @@ The Yard Team
       console.error('❌ RESEND_API_KEY not found in environment')
       console.log('🔍 Available environment variables:', Object.keys(Deno.env.toObject()))
       
-      // For now, let's just log the email content and return success
-      // This allows the invitation to be created even if email fails
-      console.log('📧 Would send email to:', invitee_email)
+      // For development, we'll simulate sending the email
+      console.log('📧 DEVELOPMENT MODE: Would send email to:', invitee_email)
       console.log('📧 Email subject:', subject)
       console.log('📧 Invite URL:', inviteUrl)
       
+      // Return success but indicate email service not configured
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: 'Invitation created (email service not configured)',
+          message: 'Invitation created (email service not configured for development)',
           invite_url: inviteUrl,
-          note: 'RESEND_API_KEY not configured - email not sent'
+          note: 'RESEND_API_KEY not configured - email simulation only',
+          dev_info: {
+            to: invitee_email,
+            subject: subject,
+            invite_url: inviteUrl
+          }
         }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
