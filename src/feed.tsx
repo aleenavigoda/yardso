@@ -1,10 +1,10 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import HomePage from './pages/index';
+import FeedPage from './pages/feed';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <HomePage />
+    <FeedPage />
   </StrictMode>
 );
