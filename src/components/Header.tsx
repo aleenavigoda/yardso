@@ -47,7 +47,12 @@ const Header = ({
     <>
       <header className="flex justify-between items-center">
         <div className="w-28">
-          <div className="text-2xl font-bold text-black italic">yard</div>
+          <button
+            onClick={() => window.location.href = '/'}
+            className="text-2xl font-bold text-black italic hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
+          >
+            yard
+          </button>
         </div>
         <nav>
           <ul className="flex gap-6 items-center">

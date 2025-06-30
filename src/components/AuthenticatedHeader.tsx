@@ -20,7 +20,7 @@ const AuthenticatedHeader = ({
     <header className="flex justify-between items-center mb-8">
       <div className="flex items-center gap-4">
         <button
-          onClick={onHomeClick}
+          onClick={() => window.location.href = '/'}
           className="text-2xl font-bold text-black italic hover:bg-white hover:bg-opacity-50 px-3 py-2 rounded-lg transition-all duration-200"
         >
           yard
