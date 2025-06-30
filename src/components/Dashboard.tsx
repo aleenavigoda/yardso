@@ -175,9 +175,30 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
         const isGiver = t.giver_id === userProfileId;
         
         // Get the other person's name
-        const otherPerson = isGiver 
-          ? (t.receiver?.full_name || t.receiver?.display_name || 'Unknown User')
-          : (t.giver?.full_name || t.giver?.display_name || 'Unknown User');
+        let otherPerson;
+        if (isGiver) {
+          // If I'm the giver, the other person is the receiver
+          if (t.receiver?.full_name) {
+            otherPerson = t.receiver.full_name;
+          } else if (t.receiver?.display_name) {
+            otherPerson = t.receiver.display_name;
+          } else {
+            // If no profile exists, this might be a pending invitation
+            // Check pending_time_logs for the invitee name
+            otherPerson = getPendingInviteeName(t.id) || 'Unknown User';
+          }
+        } else {
+          // If I'm the receiver, the other person is the giver
+          if (t.giver?.full_name) {
+            otherPerson = t.giver.full_name;
+          } else if (t.giver?.display_name) {
+            otherPerson = t.giver.display_name;
+          } else {
+            // If no profile exists, this might be a pending invitation
+            // Check pending_time_logs for the invitee name
+            otherPerson = getPendingInviteeName(t.id) || 'Unknown User';
+          }
+        }
         
         return {
           id: t.id,
@@ -193,6 +214,26 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
       setTimeActivities(activities);
     } catch (error) {
       console.error('Error loading time activities:', error);
+    }
+  };
+
+  // Helper function to get invitee name from pending_time_logs
+  const getPendingInviteeName = async (transactionId: string): Promise<string | null> => {
+    try {
+      const { data, error } = await supabase
+        .from('pending_time_logs')
+        .select('invitee_name')
+        .eq('converted_transaction_id', transactionId)
+        .single();
+      
+      if (error || !data) {
+        return null;
+      }
+      
+      return data.invitee_name;
+    } catch (error) {
+      console.error('Error getting invitee name:', error);
+      return null;
     }
   };
 
@@ -588,10 +629,13 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
   };
 
   const getInitials = (name: string) => {
+    if (!name) return '??';
     return name.split(' ').map(n => n[0]).join('').toUpperCase();
   };
 
   const getAvatarColor = (name: string) => {
+    if (!name) return 'bg-gray-400';
+    
     const colors = [
       'bg-blue-500', 'bg-green-500', 'bg-purple-500', 'bg-orange-500', 
       'bg-pink-500', 'bg-indigo-500', 'bg-red-500', 'bg-yellow-500'
