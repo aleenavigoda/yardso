@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import Header from './components/Header';
 import Hero from './components/Hero';
 import SearchForm from './components/SearchForm';
@@ -30,7 +30,6 @@ function LandingPage() {
   const [searchValue, setSearchValue] = useState('');
   const [isTimeLoggingOpen, setIsTimeLoggingOpen] = useState(false);
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
-  const [browseNetworkParams, setBrowseNetworkParams] = useState<SearchParams | undefined>();
   const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | undefined>();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -446,8 +445,18 @@ function LandingPage() {
   };
 
   const handleSubmitRequest = (searchParams: SearchParams) => {
-    setBrowseNetworkParams(searchParams);
-    navigate('/browse');
+    // Navigate to browse page with search parameters as URL params
+    const params = new URLSearchParams({
+      query: searchParams.query,
+      serviceType: searchParams.serviceType,
+      deliverableFormat: searchParams.deliverableFormat,
+      timeline: searchParams.timeline,
+      industry: searchParams.industry,
+      timeEstimate: searchParams.timeEstimate,
+      companyStage: searchParams.companyStage
+    });
+    
+    navigate(`/browse?${params.toString()}`);
   };
 
   const handleSignOut = async () => {
@@ -513,6 +522,7 @@ function LandingPage() {
 function MainApp() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [searchParams] = useSearchParams();
   const [isInitializing, setIsInitializing] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
@@ -523,6 +533,17 @@ function MainApp() {
   const isDashboardPage = currentPage === '/dashboard';
   const isFeedPage = currentPage === '/feed';
   const isBrowsePage = currentPage === '/browse';
+
+  // Parse search parameters for browse page
+  const browseSearchParams = isBrowsePage ? {
+    query: searchParams.get('query') || '',
+    serviceType: searchParams.get('serviceType') || '',
+    deliverableFormat: searchParams.get('deliverableFormat') || '',
+    timeline: searchParams.get('timeline') || '',
+    industry: searchParams.get('industry') || '',
+    timeEstimate: searchParams.get('timeEstimate') || '',
+    companyStage: searchParams.get('companyStage') || ''
+  } : undefined;
 
   // Auth state management for protected routes
   useEffect(() => {
@@ -620,7 +641,7 @@ function MainApp() {
         onFeedClick={() => navigate('/feed')}
         onDashboardClick={() => navigate('/dashboard')}
         onSignOut={handleSignOut}
-        searchParams={undefined}
+        searchParams={browseSearchParams}
       />
     );
   }
