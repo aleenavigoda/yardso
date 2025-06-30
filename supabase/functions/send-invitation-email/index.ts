@@ -134,63 +134,50 @@ The Yard Team
     console.log('📝 Generated email content for:', invitee_email)
     console.log('📧 Subject:', subject)
 
-    // For development/demo purposes, we'll simulate sending the email
-    // In production, you would integrate with a real email service like:
-    // - SendGrid
-    // - Resend
-    // - AWS SES
-    // - Postmark
-    // etc.
-
-    // Simulate email sending delay
-    await new Promise(resolve => setTimeout(resolve, 1000))
-
-    // Log the email details (in production, this would be the actual email service call)
-    console.log('✅ Email would be sent to:', invitee_email)
-    console.log('📧 Email details:', {
-      to: invitee_email,
-      subject: subject,
-      html_length: htmlContent.length,
-      text_length: textContent.length,
-      invite_url: inviteUrl
+    // Use Supabase's built-in email functionality
+    // This will use the email templates configured in your Supabase dashboard
+    const { createClient } = await import('npm:@supabase/supabase-js@2')
+    
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
     })
 
-    // TODO: Replace this simulation with actual email service integration
-    // Example with Resend (recommended for simplicity):
-    /*
-    const response = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${Deno.env.get('RESEND_API_KEY')}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: 'Yard <noreply@yard.app>',
-        to: [invitee_email],
-        subject: subject,
-        html: htmlContent,
-        text: textContent
-      })
-    })
+    // Send the email using Supabase Auth's invite functionality
+    // This will trigger the "Invite user" email template in your Supabase dashboard
+    const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
+      invitee_email,
+      {
+        data: {
+          full_name: invitee_name,
+          inviter_name: inviter_name,
+          hours: hours,
+          mode: mode,
+          action_text: actionText,
+          invitation_token: invitation_token
+        },
+        redirectTo: inviteUrl
+      }
+    )
 
-    if (!response.ok) {
-      throw new Error(`Email service error: ${response.status}`)
+    if (inviteError) {
+      console.error('❌ Supabase invite error:', inviteError)
+      throw new Error(`Failed to send invitation email: ${inviteError.message}`)
     }
 
-    const result = await response.json()
-    console.log('Email sent successfully:', result)
-    */
+    console.log('✅ Email sent successfully via Supabase:', inviteData)
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: 'Invitation email sent successfully',
         invite_url: inviteUrl,
-        debug: {
-          to: invitee_email,
-          subject: subject,
-          simulated: true
-        }
+        email_id: inviteData?.user?.id
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
