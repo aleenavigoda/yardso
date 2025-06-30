@@ -165,6 +165,10 @@ function AppContent() {
     try {
       console.log('Handling auth success for user:', user.id);
       
+      // Close any open modals immediately
+      setIsSignInOpen(false);
+      setIsSignUpOpen(false);
+      
       // First, check localStorage for existing profile
       const storedProfile = localStorage.getItem('userProfile');
       if (storedProfile) {
@@ -310,7 +314,7 @@ function AppContent() {
   };
 
   const handleSignInSuccess = () => {
-    setIsSignInOpen(false);
+    // The modal will be closed in handleAuthSuccess
     // handleAuthSuccess will be called by the auth state change listener
     // and will handle navigation to dashboard
   };
