@@ -37,30 +37,24 @@ serve(async (req) => {
       inviter_name,
       hours,
       mode,
-      invitation_token: invitation_token ? 'present' : 'missing'
+      invitation_token: invitation_token ? `${invitation_token.substring(0, 8)}...` : 'missing'
     })
 
     if (!invitee_email || !invitee_name || !inviter_name || !hours || !mode || !invitation_token) {
-      console.error('❌ Missing required fields:', {
-        invitee_email: !!invitee_email,
-        invitee_name: !!invitee_name,
-        inviter_name: !!inviter_name,
-        hours: !!hours,
-        mode: !!mode,
-        invitation_token: !!invitation_token
-      })
+      const missingFields = {
+        invitee_email: !invitee_email,
+        invitee_name: !invitee_name,
+        inviter_name: !inviter_name,
+        hours: !hours,
+        mode: !mode,
+        invitation_token: !invitation_token
+      }
+      console.error('❌ Missing required fields:', missingFields)
       return new Response(
         JSON.stringify({ 
           success: false, 
           error: 'Missing required fields',
-          received_fields: {
-            invitee_email: !!invitee_email,
-            invitee_name: !!invitee_name,
-            inviter_name: !!inviter_name,
-            hours: !!hours,
-            mode: !!mode,
-            invitation_token: !!invitation_token
-          }
+          missing_fields: missingFields
         }),
         { 
           status: 400, 
@@ -69,14 +63,15 @@ serve(async (req) => {
       )
     }
 
-    // Get the site URL from environment
-    let siteUrl = Deno.env.get('SITE_URL') || 'https://your-app.vercel.app'
-    const inviteUrl = `${siteUrl}/invite/${invitation_token}`
-
-    console.log('🔗 Generated invite URL:', inviteUrl)
-
-    // Get Resend API key from environment
+    // Get environment variables
     const resendApiKey = Deno.env.get('RESEND_API_KEY')
+    const siteUrl = Deno.env.get('SITE_URL') || 'http://localhost:5173'
+    
+    console.log('🔧 Environment check:', {
+      hasResendKey: !!resendApiKey,
+      resendKeyLength: resendApiKey?.length || 0,
+      siteUrl
+    })
     
     if (!resendApiKey) {
       console.error('❌ RESEND_API_KEY not found in environment')
@@ -84,7 +79,7 @@ serve(async (req) => {
         JSON.stringify({ 
           success: false, 
           error: 'Email service not configured - RESEND_API_KEY missing',
-          invite_url: inviteUrl
+          message: 'The email service is not properly configured. Please contact support.'
         }),
         { 
           status: 500,
@@ -93,7 +88,8 @@ serve(async (req) => {
       )
     }
 
-    console.log('🔑 Found RESEND_API_KEY, length:', resendApiKey.length)
+    const inviteUrl = `${siteUrl}/invite/${invitation_token}`
+    console.log('🔗 Generated invite URL:', inviteUrl)
 
     // Generate email content
     const actionText = mode === 'helped' ? 'helped you' : 'you helped them'
@@ -162,77 +158,107 @@ Best regards,
 The Yard Team
     `.trim()
 
-    console.log('📮 Attempting to send email via Resend API...')
-
-    // Send email using Resend API
-    const emailPayload = {
-      from: 'Yard <onboarding@resend.dev>', // Use Resend's default domain for testing
-      to: [invitee_email],
-      subject: subject,
-      html: htmlContent,
-      text: textContent
-    }
-
-    console.log('📤 Email payload:', {
-      from: emailPayload.from,
-      to: emailPayload.to,
-      subject: emailPayload.subject
-    })
-
-    const emailResponse = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${resendApiKey}`,
-        'Content-Type': 'application/json',
+    // Prepare email payload - try different from addresses
+    const emailPayloads = [
+      {
+        from: 'Yard <noreply@yard.app>',
+        to: [invitee_email],
+        subject: subject,
+        html: htmlContent,
+        text: textContent
       },
-      body: JSON.stringify(emailPayload)
-    })
+      {
+        from: 'Yard <onboarding@resend.dev>',
+        to: [invitee_email],
+        subject: subject,
+        html: htmlContent,
+        text: textContent
+      },
+      {
+        from: 'noreply@yard.app',
+        to: [invitee_email],
+        subject: subject,
+        html: htmlContent,
+        text: textContent
+      }
+    ]
 
-    console.log('📬 Resend API response status:', emailResponse.status)
-    
-    const emailResult = await emailResponse.json()
-    console.log('📬 Resend API response:', emailResult)
+    console.log('📤 Attempting to send email...')
 
-    if (!emailResponse.ok) {
-      console.error('❌ Resend API error:', emailResult)
-      
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Email delivery failed',
-          message: emailResult.message || 'Unknown email error',
-          invite_url: inviteUrl,
-          resend_error: emailResult,
-          status_code: emailResponse.status
-        }),
-        { 
-          status: 200, // Return 200 so the invitation is still created
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+    let lastError = null
+    let emailResult = null
+
+    // Try different from addresses
+    for (let i = 0; i < emailPayloads.length; i++) {
+      const payload = emailPayloads[i]
+      console.log(`📮 Attempt ${i + 1}: Trying from address: ${payload.from}`)
+
+      try {
+        const emailResponse = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${resendApiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(payload)
+        })
+
+        console.log(`📬 Resend API response status (attempt ${i + 1}):`, emailResponse.status)
+        
+        emailResult = await emailResponse.json()
+        console.log(`📬 Resend API response (attempt ${i + 1}):`, emailResult)
+
+        if (emailResponse.ok) {
+          console.log('✅ Email sent successfully!')
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              message: 'Invitation email sent successfully!',
+              invite_url: inviteUrl,
+              email_id: emailResult.id,
+              from_address: payload.from
+            }),
+            { 
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          )
+        } else {
+          lastError = emailResult
+          console.log(`❌ Attempt ${i + 1} failed:`, emailResult)
         }
-      )
+      } catch (fetchError) {
+        console.error(`💥 Fetch error on attempt ${i + 1}:`, fetchError)
+        lastError = { error: fetchError.message }
+      }
     }
 
-    console.log('✅ Email sent successfully via Resend')
-
+    // All attempts failed
+    console.error('❌ All email sending attempts failed')
+    
     return new Response(
       JSON.stringify({ 
-        success: true, 
-        message: 'Invitation email sent successfully!',
+        success: false, 
+        error: 'Email delivery failed after multiple attempts',
+        message: 'Unable to send email invitation. The invitation link is still valid.',
         invite_url: inviteUrl,
-        email_id: emailResult.id
+        last_error: lastError,
+        attempts_made: emailPayloads.length
       }),
       { 
+        status: 200, // Return 200 so the invitation is still created
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     )
+
   } catch (error) {
-    console.error('💥 Error in send-invitation-email function:', error)
+    console.error('💥 Critical error in send-invitation-email function:', error)
     
     return new Response(
       JSON.stringify({ 
         success: false,
         error: 'Email function error',
-        message: error.message
+        message: error.message,
+        stack: error.stack
       }),
       { 
         status: 200, // Return 200 so the invitation is still created
