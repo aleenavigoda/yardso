@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import Hero from '../components/Hero';
 import SearchForm from '../components/SearchForm';
@@ -8,7 +9,6 @@ import TimeLoggingBanner from '../components/TimeLoggingBanner';
 import TimeLoggingModal from '../components/TimeLoggingModal';
 import SignUpModal from '../components/SignUpModal';
 import SignInModal from '../components/SignInModal';
-import { useNavigate } from 'react-router-dom';
 import type { TimeLoggingData } from '../types';
 
 interface LandingPageProps {
@@ -24,6 +24,8 @@ interface LandingPageProps {
   setPendingTimeLog: (data: TimeLoggingData | undefined) => void;
   onAuthSuccess: (user: any) => void;
   onSignOut: () => void;
+  onSignInSuccess: () => void;
+  onSignUpSuccess: () => void;
 }
 
 const LandingPage = ({
@@ -38,7 +40,9 @@ const LandingPage = ({
   pendingTimeLog,
   setPendingTimeLog,
   onAuthSuccess,
-  onSignOut
+  onSignOut,
+  onSignInSuccess,
+  onSignUpSuccess
 }: LandingPageProps) => {
   const navigate = useNavigate();
   const [searchValue, setSearchValue] = React.useState('');
@@ -52,17 +56,6 @@ const LandingPage = ({
   const handleTimeLoggingDirect = async (timeLoggingData: TimeLoggingData) => {
     // This would be handled by the time logging modal
     setIsTimeLoggingOpen(false);
-  };
-
-  const handleSignUpSuccess = () => {
-    setIsSignUpOpen(false);
-    setPendingTimeLog(undefined);
-    navigate('/dashboard');
-  };
-
-  const handleSignInSuccess = () => {
-    setIsSignInOpen(false);
-    navigate('/dashboard');
   };
 
   const handleSubmitRequest = (searchParams: any) => {
@@ -116,13 +109,13 @@ const LandingPage = ({
         isOpen={isSignUpOpen}
         onClose={() => setIsSignUpOpen(false)}
         timeLoggingData={pendingTimeLog}
-        onSignUpSuccess={handleSignUpSuccess}
+        onSignUpSuccess={onSignUpSuccess}
       />
 
       <SignInModal
         isOpen={isSignInOpen}
         onClose={() => setIsSignInOpen(false)}
-        onSignInSuccess={handleSignInSuccess}
+        onSignInSuccess={onSignInSuccess}
       />
     </div>
   );

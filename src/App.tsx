@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, useNavigate } from 'react-router-dom';
 import LandingPage from './pages/LandingPage';
-import BrowseNetworkPage from './pages/BrowseNetworkPage';
+import BrowseNetwork from './components/BrowseNetwork';
 import Feed from './components/Feed';
 import Dashboard from './components/Dashboard';
 import InviteSignUpPage from './components/InviteSignUpPage';
-import ProtectedRoute from './components/ProtectedRoute';
-import SignInModal from './components/SignInModal';
 import { supabase } from './lib/supabase';
 import type { TimeLoggingData } from './types';
 
@@ -292,20 +290,22 @@ function AppContent() {
     } finally {
       // Always clear auth state regardless of server response
       clearAuthState();
-      // Navigate to home after sign out
-      window.location.href = '/';
+      // Navigate to home using React Router
+      navigate('/');
     }
-  };
-
-  const handlePromptSignIn = () => {
-    setIsSignInOpen(true);
   };
 
   const handleSignInSuccess = () => {
     // Close modal immediately
     setIsSignInOpen(false);
-    // Navigate to dashboard
-    window.location.href = '/dashboard';
+    // Navigate to dashboard using React Router
+    navigate('/dashboard');
+  };
+
+  const handleSignUpSuccess = () => {
+    setIsSignUpOpen(false);
+    setPendingTimeLog(undefined);
+    navigate('/dashboard');
   };
 
   // Simplified auth initialization with shorter timeout and better error handling
@@ -402,71 +402,63 @@ function AppContent() {
   }
 
   return (
-    <>
-      <Routes>
-        <Route path="/invite/:token" element={<InviteSignUpPage />} />
-        <Route 
-          path="/" 
-          element={
-            <LandingPage 
-              isAuthenticated={isAuthenticated}
-              userProfile={userProfile}
-              isTimeLoggingOpen={isTimeLoggingOpen}
-              setIsTimeLoggingOpen={setIsTimeLoggingOpen}
-              isSignUpOpen={isSignUpOpen}
-              setIsSignUpOpen={setIsSignUpOpen}
-              isSignInOpen={isSignInOpen}
-              setIsSignInOpen={setIsSignInOpen}
-              pendingTimeLog={pendingTimeLog}
-              setPendingTimeLog={setPendingTimeLog}
-              onAuthSuccess={handleAuthSuccess}
-              onSignOut={handleSignOut}
-            />
-          } 
-        />
-        <Route 
-          path="/browse" 
-          element={
-            <BrowseNetworkPage 
-              isAuthenticated={isAuthenticated}
-              onSignOut={handleSignOut}
-              onPromptSignIn={handlePromptSignIn}
-            />
-          } 
-        />
-        <Route 
-          path="/feed" 
-          element={
-            <ProtectedRoute isAuthenticated={isAuthenticated}>
-              <Feed 
-                onBack={() => window.location.href = '/'} 
-                onDashboardClick={() => window.location.href = '/dashboard'}
-                onSignOut={handleSignOut}
-              />
-            </ProtectedRoute>
-          } 
-        />
-        <Route 
-          path="/dashboard" 
-          element={
-            <ProtectedRoute isAuthenticated={isAuthenticated}>
-              <Dashboard 
-                onBack={() => window.location.href = '/'} 
-                onFeedClick={() => window.location.href = '/feed'}
-                onBrowseNetworkClick={() => window.location.href = '/browse'}
-              />
-            </ProtectedRoute>
-          } 
-        />
-      </Routes>
-
-      {/* Global Sign In Modal */}
-      <SignInModal
-        isOpen={isSignInOpen}
-        onClose={() => setIsSignInOpen(false)}
-        onSignInSuccess={handleSignInSuccess}
+    <Routes>
+      <Route path="/invite/:token" element={<InviteSignUpPage />} />
+      <Route 
+        path="/" 
+        element={
+          <LandingPage 
+            isAuthenticated={isAuthenticated}
+            userProfile={userProfile}
+            isTimeLoggingOpen={isTimeLoggingOpen}
+            setIsTimeLoggingOpen={setIsTimeLoggingOpen}
+            isSignUpOpen={isSignUpOpen}
+            setIsSignUpOpen={setIsSignUpOpen}
+            isSignInOpen={isSignInOpen}
+            setIsSignInOpen={setIsSignInOpen}
+            pendingTimeLog={pendingTimeLog}
+            setPendingTimeLog={setPendingTimeLog}
+            onAuthSuccess={handleAuthSuccess}
+            onSignOut={handleSignOut}
+            onSignInSuccess={handleSignInSuccess}
+            onSignUpSuccess={handleSignUpSuccess}
+          />
+        } 
       />
-    </>
+      <Route 
+        path="/browse" 
+        element={
+          <BrowseNetwork 
+            onBack={() => navigate('/')}
+            onFeedClick={() => navigate('/feed')}
+            onDashboardClick={() => navigate('/dashboard')}
+            onSignOut={handleSignOut}
+            isAuthenticated={isAuthenticated}
+            onPromptSignIn={() => setIsSignInOpen(true)}
+          />
+        } 
+      />
+      <Route 
+        path="/feed" 
+        element={
+          <Feed 
+            onBack={() => navigate('/')} 
+            onDashboardClick={() => navigate('/dashboard')}
+            onSignOut={handleSignOut}
+          />
+        } 
+      />
+      <Route 
+        path="/dashboard" 
+        element={
+          <Dashboard 
+            onBack={() => navigate('/')} 
+            onFeedClick={() => navigate('/feed')}
+            onBrowseNetworkClick={() => navigate('/browse')}
+          />
+        } 
+      />
+    </Routes>
   );
 }
 
