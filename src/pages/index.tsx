@@ -176,22 +176,21 @@ function HomePage() {
           const profile = JSON.parse(storedProfile);
           if (profile.user_id === user.id) {
             console.log('Using cached profile from localStorage');
-            setUserProfile(profile);
-            setIsAuthenticated(true);
             
             // Check for pending time log data
             const pendingTimeLogData = localStorage.getItem('pendingTimeLog');
             if (pendingTimeLogData) {
               try {
                 const timeLogData = JSON.parse(pendingTimeLogData);
-                setPendingTimeLog(timeLogData);
+                // Store it for the dashboard to pick up
               } catch (e) {
                 console.error('Error parsing pending time log data:', e);
                 localStorage.removeItem('pendingTimeLog');
               }
             }
             
-            // Redirect to dashboard
+            // IMMEDIATELY redirect to dashboard - don't set any state
+            console.log('Redirecting to dashboard...');
             window.location.href = '/dashboard.html';
             return;
           }
@@ -241,27 +240,25 @@ function HomePage() {
         console.log('Using existing profile:', existingProfile.id);
       }
 
-      // Cache the profile and set state
+      // Cache the profile
       localStorage.setItem('userProfile', JSON.stringify(profile));
-      setUserProfile(profile);
-      setIsAuthenticated(true);
       
       // Check for pending time log data
       const pendingTimeLogData = localStorage.getItem('pendingTimeLog');
       if (pendingTimeLogData) {
         try {
           const timeLogData = JSON.parse(pendingTimeLogData);
-          setPendingTimeLog(timeLogData);
+          // Store it for the dashboard to pick up
         } catch (e) {
           console.error('Error parsing pending time log data:', e);
           localStorage.removeItem('pendingTimeLog');
         }
       }
       
-      // Redirect to dashboard
+      // IMMEDIATELY redirect to dashboard - don't set any state
+      console.log('Redirecting to dashboard...');
       window.location.href = '/dashboard.html';
       
-      console.log('Auth success completed successfully');
     } catch (error: any) {
       console.error('Error in handleAuthSuccess:', error);
       // Don't prevent sign-in for profile errors - create minimal profile
@@ -274,10 +271,9 @@ function HomePage() {
         time_balance_hours: 0
       };
       localStorage.setItem('userProfile', JSON.stringify(basicProfile));
-      setUserProfile(basicProfile);
-      setIsAuthenticated(true);
       
-      // Redirect to dashboard even on error
+      // IMMEDIATELY redirect to dashboard even on error
+      console.log('Redirecting to dashboard after error...');
       window.location.href = '/dashboard.html';
     }
   };
@@ -285,16 +281,15 @@ function HomePage() {
   const clearAuthState = () => {
     localStorage.removeItem('userProfile');
     localStorage.removeItem('pendingTimeLog');
-    setPendingTimeLog(undefined);
     setIsAuthenticated(false);
     setUserProfile(null);
   };
 
-  // Auth initialization
+  // Auth initialization - simplified to only check auth, not set dashboard state
   useEffect(() => {
     let isMounted = true;
     
-    // Set up auth state listener first
+    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         console.log('Auth state changed:', event);
@@ -347,8 +342,10 @@ function HomePage() {
         if (session?.user) {
           console.log('Initial session found for user:', session.user.id);
           await handleAuthSuccess(session.user);
+          return; // Don't set isInitializing to false here, let the redirect happen
         } else {
           clearAuthState();
+          setIsAuthenticated(false);
         }
         
         setIsInitializing(false);
@@ -468,6 +465,7 @@ function HomePage() {
     );
   }
 
+  // ONLY show the landing page - never show dashboard content here
   return (
     <div className="min-h-screen w-full bg-amber-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -493,7 +491,7 @@ function HomePage() {
           }}
         />
         <main className="mt-16 md:mt-24">
-          {!isAuthenticated && <Hero />}
+          <Hero />
           
           <TimeLoggingBanner onLogTime={() => setIsTimeLoggingOpen(true)} />
           
