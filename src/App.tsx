@@ -279,8 +279,13 @@ function App() {
   const handleSignOut = async () => {
     try {
       await supabase.auth.signOut();
-    } catch (error) {
-      console.error('Error signing out:', error);
+    } catch (error: any) {
+      // Check if this is the expected "session not found" error
+      if (error?.message?.includes('Session from session_id claim in JWT does not exist')) {
+        console.warn('Attempted to sign out with invalid session - this is expected behavior');
+      } else {
+        console.error('Error signing out:', error);
+      }
       // Continue with clearing state even if signOut fails
     } finally {
       // Always clear auth state regardless of server response
