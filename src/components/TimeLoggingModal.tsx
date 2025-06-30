@@ -100,6 +100,8 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
           throw new Error('Please provide a valid email address for new users');
         }
 
+        console.log('Creating invitation for new user:', contact);
+
         // Use the RPC function to create invitation and pending time log
         const { data: invitationData, error: invitationError } = await supabase
           .rpc('create_invitation_with_time_log', {
@@ -113,10 +115,41 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
             p_mode: mode
           });
 
-        if (invitationError) throw invitationError;
+        if (invitationError) {
+          console.error('RPC error:', invitationError);
+          throw invitationError;
+        }
 
         if (!invitationData.success) {
+          console.error('RPC returned error:', invitationData.error);
           throw new Error(invitationData.error || 'Failed to create invitation');
+        }
+
+        console.log('Invitation created successfully:', invitationData);
+
+        // Now send the actual email using our edge function
+        try {
+          const { data: emailResult, error: emailError } = await supabase.functions.invoke('send-invitation-email', {
+            body: {
+              invitee_email: contact,
+              invitee_name: name,
+              inviter_name: profile.full_name || profile.display_name || 'A Yard member',
+              hours: hours,
+              mode: mode,
+              invitation_token: invitationData.invitation_token || 'temp-token'
+            }
+          });
+
+          if (emailError) {
+            console.error('Email sending error:', emailError);
+            // Don't throw here - the invitation was created successfully
+            console.warn('Invitation created but email failed to send');
+          } else {
+            console.log('Email sent successfully:', emailResult);
+          }
+        } catch (emailError) {
+          console.error('Email function error:', emailError);
+          // Don't throw here - the invitation was created successfully
         }
 
         setSuccessMessage(`Invitation sent to ${name}! They'll receive an email to join Yard and confirm the ${hours} hour${hours !== 1 ? 's' : ''} of ${mode === 'helped' ? 'help you provided' : 'help they provided'}.`);

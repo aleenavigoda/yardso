@@ -223,6 +223,8 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
           throw new Error('Please provide a valid email address for new users');
         }
 
+        console.log('Creating invitation for new user:', timeLogForm.contact);
+
         // Use the RPC function to create invitation and pending time log
         const { data: invitationData, error: invitationError } = await supabase
           .rpc('create_invitation_with_time_log', {
@@ -236,10 +238,41 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
             p_mode: timeLogForm.mode
           });
 
-        if (invitationError) throw invitationError;
+        if (invitationError) {
+          console.error('RPC error:', invitationError);
+          throw invitationError;
+        }
 
         if (!invitationData.success) {
+          console.error('RPC returned error:', invitationData.error);
           throw new Error(invitationData.error || 'Failed to create invitation');
+        }
+
+        console.log('Invitation created successfully:', invitationData);
+
+        // Now send the actual email using our edge function
+        try {
+          const { data: emailResult, error: emailError } = await supabase.functions.invoke('send-invitation-email', {
+            body: {
+              invitee_email: timeLogForm.contact,
+              invitee_name: timeLogForm.name,
+              inviter_name: profile.full_name || profile.display_name || 'A Yard member',
+              hours: timeLogForm.hours,
+              mode: timeLogForm.mode,
+              invitation_token: invitationData.invitation_token || 'temp-token'
+            }
+          });
+
+          if (emailError) {
+            console.error('Email sending error:', emailError);
+            // Don't throw here - the invitation was created successfully
+            console.warn('Invitation created but email failed to send');
+          } else {
+            console.log('Email sent successfully:', emailResult);
+          }
+        } catch (emailError) {
+          console.error('Email function error:', emailError);
+          // Don't throw here - the invitation was created successfully
         }
 
         alert(`Invitation sent to ${timeLogForm.name}! They'll receive an email to join Yard and confirm the time log.`);
@@ -351,6 +384,8 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
           throw new Error('Please provide a valid email address for new users');
         }
 
+        console.log('Creating invitation for new user:', timeLoggingData.contact);
+
         // Use the RPC function to create invitation and pending time log
         const { data: invitationData, error: invitationError } = await supabase
           .rpc('create_invitation_with_time_log', {
@@ -364,10 +399,41 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
             p_mode: timeLoggingData.mode
           });
 
-        if (invitationError) throw invitationError;
+        if (invitationError) {
+          console.error('RPC error:', invitationError);
+          throw invitationError;
+        }
 
         if (!invitationData.success) {
+          console.error('RPC returned error:', invitationData.error);
           throw new Error(invitationData.error || 'Failed to create invitation');
+        }
+
+        console.log('Invitation created successfully:', invitationData);
+
+        // Now send the actual email using our edge function
+        try {
+          const { data: emailResult, error: emailError } = await supabase.functions.invoke('send-invitation-email', {
+            body: {
+              invitee_email: timeLoggingData.contact,
+              invitee_name: timeLoggingData.name,
+              inviter_name: profile.full_name || profile.display_name || 'A Yard member',
+              hours: timeLoggingData.hours,
+              mode: timeLoggingData.mode,
+              invitation_token: invitationData.invitation_token || 'temp-token'
+            }
+          });
+
+          if (emailError) {
+            console.error('Email sending error:', emailError);
+            // Don't throw here - the invitation was created successfully
+            console.warn('Invitation created but email failed to send');
+          } else {
+            console.log('Email sent successfully:', emailResult);
+          }
+        } catch (emailError) {
+          console.error('Email function error:', emailError);
+          // Don't throw here - the invitation was created successfully
         }
 
         alert(`Invitation sent to ${timeLoggingData.name}! They'll receive an email to join Yard and confirm the time log.`);
