@@ -27,6 +27,17 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   };
 
+  const getDeploymentUrl = () => {
+    // Check if we're in development or production
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      return window.location.origin; // Use localhost for development
+    }
+    
+    // For production, use the actual deployed URL
+    // This will be the Netlify URL or custom domain
+    return window.location.origin;
+  };
+
   const copyToClipboard = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text);
@@ -140,8 +151,9 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
 
         console.log('Invitation created successfully:', invitationData);
 
-        // Generate the actual invite URL
-        const inviteUrl = `${window.location.origin}/invite/${invitationData.invitation_token}`;
+        // Generate the actual invite URL using the current deployment URL
+        const deploymentUrl = getDeploymentUrl();
+        const inviteUrl = `${deploymentUrl}/invite/${invitationData.invitation_token}`;
         setInviteLink(inviteUrl);
 
         setSuccessMessage(`Invitation created for ${name}! Share the link below for them to join Yard and confirm the time log.`);
@@ -268,6 +280,9 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
                           Open
                         </a>
                       </div>
+                      <p className="text-green-700 text-xs mt-2">
+                        💡 You can share this link via email, text, Slack, or any other method!
+                      </p>
                     </div>
                   )}
                 </div>
@@ -327,7 +342,7 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
               <p className="text-xs text-gray-500 mt-1">
                 {isAuthenticated ? (
                   isValidEmail(contact) 
-                    ? "We'll check if they're on Yard or create an invitation link"
+                    ? "We'll check if they're on Yard or create a shareable invitation link"
                     : "Please enter a valid email address"
                 ) : (
                   isValidEmail(contact) 
@@ -421,7 +436,7 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
           
           <p className="text-center text-xs text-gray-500">
             {isAuthenticated 
-              ? "They'll get an invitation link to join and confirm this time entry"
+              ? "You'll get a shareable link to send them for joining and confirming this time entry"
               : "They'll get an invite to join your workyard and confirm this time entry"
             }
           </p>
