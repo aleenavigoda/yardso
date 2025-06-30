@@ -3,6 +3,7 @@ import { Search, Filter, MapPin, Users, ChevronDown, X, DollarSign, Calendar, Ta
 import { supabase } from '../lib/supabase';
 import { useSearchParams } from 'react-router-dom';
 import AuthenticatedHeader from './AuthenticatedHeader';
+import Header from './Header';
 import ProfileModal from './ProfileModal';
 
 interface NetworkUser {
@@ -602,14 +603,28 @@ const BrowseNetwork = ({
   return (
     <div className="min-h-screen w-full bg-amber-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        {/* Header */}
-        <AuthenticatedHeader
-          currentPage="main"
-          onFeedClick={onFeedClick}
-          onDashboardClick={onDashboardClick}
-          onSignOut={onSignOut}
-          onHomeClick={onBack}
-        />
+        {/* Header - Show different header based on authentication status */}
+        {isAuthenticated ? (
+          <AuthenticatedHeader
+            currentPage="main"
+            onFeedClick={onFeedClick}
+            onDashboardClick={onDashboardClick}
+            onSignOut={onSignOut}
+            onHomeClick={onBack}
+          />
+        ) : (
+          <Header 
+            isAuthenticated={false}
+            userProfile={null}
+            showDashboard={false}
+            showFeed={false}
+            onSignUpSuccess={() => {}}
+            onSignInSuccess={() => {}}
+            onDashboardClick={onDashboardClick}
+            onFeedClick={onFeedClick}
+            onSignOut={onSignOut}
+          />
+        )}
 
         {/* Page Title */}
         <div className="mb-8">
