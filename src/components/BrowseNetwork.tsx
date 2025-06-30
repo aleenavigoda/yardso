@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, MapPin, Users, ChevronDown, X, DollarSign, Calendar, Target, CheckCircle, ExternalLink, Github, Linkedin, Twitter, Globe, Bot, UserCheck, MessageCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
-import { useSearchParams } from 'react-router-dom';
 import AuthenticatedHeader from './AuthenticatedHeader';
 import ProfileModal from './ProfileModal';
 
@@ -57,10 +56,21 @@ const BrowseNetwork = ({
   isAuthenticated = false,
   onPromptSignIn 
 }: BrowseNetworkProps) => {
-  const [searchParams] = useSearchParams();
+  // Get search parameters from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const urlSearchParams = {
+    query: urlParams.get('query') || '',
+    serviceType: urlParams.get('serviceType') || '',
+    deliverableFormat: urlParams.get('deliverableFormat') || '',
+    timeline: urlParams.get('timeline') || '',
+    industry: urlParams.get('industry') || '',
+    timeEstimate: urlParams.get('timeEstimate') || '',
+    companyStage: urlParams.get('companyStage') || ''
+  };
+
   const [users, setUsers] = useState<NetworkUser[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<NetworkUser[]>([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(urlSearchParams.query);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -79,17 +89,6 @@ const BrowseNetwork = ({
     hasMore: true,
     totalCount: 0
   });
-
-  // Parse search parameters from URL
-  const urlSearchParams = {
-    query: searchParams.get('query') || '',
-    serviceType: searchParams.get('serviceType') || '',
-    deliverableFormat: searchParams.get('deliverableFormat') || '',
-    timeline: searchParams.get('timeline') || '',
-    industry: searchParams.get('industry') || '',
-    timeEstimate: searchParams.get('timeEstimate') || '',
-    companyStage: searchParams.get('companyStage') || ''
-  };
   
   const [filters, setFilters] = useState<FilterState>({
     serviceType: urlSearchParams.serviceType,
@@ -100,13 +99,6 @@ const BrowseNetwork = ({
     companyStage: urlSearchParams.companyStage,
     profileType: ''
   });
-
-  // Set initial search query from URL
-  useEffect(() => {
-    if (urlSearchParams.query) {
-      setSearchQuery(urlSearchParams.query);
-    }
-  }, []);
 
   // Landing page search parameters - exact same as SearchForm
   const serviceTypes = [

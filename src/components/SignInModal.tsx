@@ -43,7 +43,6 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
         } else {
           setError(authError.message || 'Sign in failed. Please try again.');
         }
-        setIsLoading(false);
         return;
       }
 
@@ -54,8 +53,8 @@ const SignInModal = ({ isOpen, onClose, onSignInSuccess }: SignInModalProps) => 
         setFormData({ email: '', password: '' });
         setError('');
         
-        // The auth state change listener will handle the rest
-        console.log('Sign in successful, calling onSignInSuccess');
+        // Close modal and trigger success callback
+        onClose();
         onSignInSuccess();
       } else {
         setError('Sign in failed. Please try again.');
