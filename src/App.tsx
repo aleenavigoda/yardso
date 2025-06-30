@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import Header from './components/Header';
 import Hero from './components/Hero';
 import SearchForm from './components/SearchForm';
@@ -7,6 +8,9 @@ import Footer from './components/Footer';
 import TimeLoggingBanner from './components/TimeLoggingBanner';
 import TimeLoggingModal from './components/TimeLoggingModal';
 import SignUpModal from './components/SignUpModal';
+import Dashboard from './components/Dashboard';
+import Feed from './components/Feed';
+import BrowseNetwork from './components/BrowseNetwork';
 import InviteSignUpPage from './components/InviteSignUpPage';
 import { supabase } from './lib/supabase';
 import type { TimeLoggingData } from './types';
@@ -21,21 +25,24 @@ interface SearchParams {
   companyStage: string;
 }
 
-function App() {
+function MainApp() {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [searchValue, setSearchValue] = useState('');
   const [isTimeLoggingOpen, setIsTimeLoggingOpen] = useState(false);
   const [isSignUpOpen, setIsSignUpOpen] = useState(false);
+  const [browseNetworkParams, setBrowseNetworkParams] = useState<SearchParams | undefined>();
   const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | undefined>();
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
   const [isInitializing, setIsInitializing] = useState(true);
 
-  // Check if this is an invite page
-  const isInvitePage = window.location.pathname.startsWith('/invite/');
-  
-  if (isInvitePage) {
-    return <InviteSignUpPage />;
-  }
+  // Determine current page from URL
+  const currentPage = location.pathname;
+  const isLandingPage = currentPage === '/';
+  const isDashboardPage = currentPage === '/dashboard';
+  const isFeedPage = currentPage === '/feed';
+  const isBrowsePage = currentPage === '/browse';
 
   const detectUrlType = (url: string): string => {
     if (url.includes('github.com')) return 'github';
@@ -199,9 +206,9 @@ function App() {
               }
             }
             
-            // REDIRECT TO DASHBOARD
-            window.location.href = '/dashboard.html';
-            return;
+            // NAVIGATE TO DASHBOARD
+            navigate('/dashboard');
+            return; // Exit early with cached data
           }
         } catch (e) {
           console.error('Error parsing stored profile:', e);
@@ -266,8 +273,8 @@ function App() {
         }
       }
       
-      // REDIRECT TO DASHBOARD
-      window.location.href = '/dashboard.html';
+      // NAVIGATE TO DASHBOARD
+      navigate('/dashboard');
       
       console.log('Auth success completed successfully');
     } catch (error: any) {
@@ -285,8 +292,8 @@ function App() {
       setUserProfile(basicProfile);
       setIsAuthenticated(true);
       
-      // REDIRECT TO DASHBOARD EVEN ON ERROR
-      window.location.href = '/dashboard.html';
+      // NAVIGATE TO DASHBOARD EVEN ON ERROR
+      navigate('/dashboard');
     }
   };
 
@@ -445,7 +452,7 @@ function App() {
   const handleSignUpSuccess = () => {
     setIsSignUpOpen(false);
     setPendingTimeLog(undefined);
-    window.location.href = '/dashboard.html';
+    navigate('/dashboard');
   };
 
   const handleSignUpClose = () => {
@@ -453,29 +460,28 @@ function App() {
   };
 
   const handleHeaderSignUpSuccess = () => {
-    window.location.href = '/dashboard.html';
+    navigate('/dashboard');
   };
 
   const handleHeaderSignInSuccess = () => {
-    window.location.href = '/dashboard.html';
+    navigate('/dashboard');
   };
 
   const handleSubmitRequest = (searchParams: SearchParams) => {
-    // Store search params and redirect to browse page
-    localStorage.setItem('browseNetworkParams', JSON.stringify(searchParams));
-    window.location.href = '/browse.html';
+    setBrowseNetworkParams(searchParams);
+    navigate('/browse');
   };
 
   const handleSignOut = async () => {
     try {
       await supabase.auth.signOut();
       clearAuthState();
-      window.location.href = '/';
+      navigate('/');
     } catch (error) {
       console.error('Error signing out:', error);
       // Still clear state even if signOut fails
       clearAuthState();
-      window.location.href = '/';
+      navigate('/');
     }
   };
 
@@ -492,23 +498,65 @@ function App() {
     );
   }
 
+  // Show browse network if user wants to see it
+  if (isBrowsePage) {
+    return (
+      <BrowseNetwork 
+        onBack={() => navigate('/')}
+        onFeedClick={() => navigate('/feed')}
+        onDashboardClick={() => navigate('/dashboard')}
+        onSignOut={handleSignOut}
+        searchParams={browseNetworkParams}
+      />
+    );
+  }
+
+  // Show feed if user is authenticated and wants to see it
+  if (isFeedPage && isAuthenticated) {
+    return (
+      <Feed 
+        onBack={() => navigate('/')} 
+        onDashboardClick={() => navigate('/dashboard')}
+        onSignOut={handleSignOut}
+      />
+    );
+  }
+
+  // Show dashboard if user is authenticated and wants to see it
+  if (isDashboardPage && isAuthenticated) {
+    return (
+      <Dashboard 
+        onBack={() => navigate('/')} 
+        onFeedClick={() => navigate('/feed')}
+        onBrowseNetworkClick={() => navigate('/browse')}
+      />
+    );
+  }
+
+  // If user is authenticated but on landing page, redirect to dashboard
+  if (isAuthenticated && isLandingPage) {
+    navigate('/dashboard');
+    return null;
+  }
+
+  // Show landing page for non-authenticated users or when explicitly on landing page
   return (
     <div className="min-h-screen w-full bg-amber-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         <Header 
           isAuthenticated={isAuthenticated}
           userProfile={userProfile}
-          showDashboard={false}
-          showFeed={false}
+          showDashboard={isDashboardPage}
+          showFeed={isFeedPage}
           onSignUpSuccess={handleHeaderSignUpSuccess}
           onSignInSuccess={handleHeaderSignInSuccess}
-          onDashboardClick={() => window.location.href = '/dashboard.html'}
-          onFeedClick={() => window.location.href = '/feed.html'}
+          onDashboardClick={() => navigate('/dashboard')}
+          onFeedClick={() => navigate('/feed')}
           onSignOut={handleSignOut}
         />
         <main className="mt-16 md:mt-24">
-          {/* Only show Hero section on landing page */}
-          <Hero />
+          {/* Only show Hero section if not authenticated */}
+          {!isAuthenticated && <Hero />}
           
           {/* Show time logging banner for both authenticated and non-authenticated users */}
           <TimeLoggingBanner onLogTime={() => setIsTimeLoggingOpen(true)} />
@@ -538,6 +586,17 @@ function App() {
         onSignUpSuccess={handleSignUpSuccess}
       />
     </div>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/invite/:token" element={<InviteSignUpPage />} />
+        <Route path="/*" element={<MainApp />} />
+      </Routes>
+    </Router>
   );
 }
 
