@@ -1,38 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import Header from './components/Header';
-import Hero from './components/Hero';
-import SearchForm from './components/SearchForm';
-import ExampleQueries from './components/ExampleQueries';
-import Footer from './components/Footer';
-import TimeLoggingBanner from './components/TimeLoggingBanner';
-import TimeLoggingModal from './components/TimeLoggingModal';
-import SignUpModal from './components/SignUpModal';
-import Dashboard from './components/Dashboard';
-import Feed from './components/Feed';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import LandingPage from './pages/LandingPage';
+import MainApp from './pages/MainApp';
 import BrowseNetwork from './components/BrowseNetwork';
+import Feed from './components/Feed';
+import Dashboard from './components/Dashboard';
 import InviteSignUpPage from './components/InviteSignUpPage';
 import { supabase } from './lib/supabase';
 import type { TimeLoggingData } from './types';
 
-interface SearchParams {
-  query: string;
-  serviceType: string;
-  deliverableFormat: string;
-  timeline: string;
-  industry: string;
-  timeEstimate: string;
-  companyStage: string;
-}
-
-function LandingPage() {
-  const navigate = useNavigate();
-  const [searchValue, setSearchValue] = useState('');
-  const [isTimeLoggingOpen, setIsTimeLoggingOpen] = useState(false);
-  const [isSignUpOpen, setIsSignUpOpen] = useState(false);
-  const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | undefined>();
+function App() {
+  // Centralized authentication state
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
+  
+  // Modal states
+  const [isTimeLoggingOpen, setIsTimeLoggingOpen] = useState(false);
+  const [isSignUpOpen, setIsSignUpOpen] = useState(false);
+  const [isSignInOpen, setIsSignInOpen] = useState(false);
+  
+  // Pending data
+  const [pendingTimeLog, setPendingTimeLog] = useState<TimeLoggingData | undefined>();
 
   const detectUrlType = (url: string): string => {
     if (url.includes('github.com')) return 'github';
@@ -196,7 +185,7 @@ function LandingPage() {
               }
             }
             
-            return; // Don't auto-navigate, let user stay on landing page
+            return; // Exit early with cached data
           }
         } catch (e) {
           console.error('Error parsing stored profile:', e);
@@ -287,14 +276,26 @@ function LandingPage() {
     setUserProfile(null);
   };
 
-  // Auth state management
+  const handleSignOut = async () => {
+    try {
+      await supabase.auth.signOut();
+    } catch (error) {
+      console.error('Error signing out:', error);
+      // Continue with clearing state even if signOut fails
+    } finally {
+      // Always clear auth state regardless of server response
+      clearAuthState();
+    }
+  };
+
+  // Simplified auth initialization with shorter timeout and better error handling
   useEffect(() => {
     let isMounted = true;
     
     // Set up auth state listener first
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
-        console.log('Auth state changed:', event, 'Session exists:', !!session);
+        console.log('Auth state changed:', event);
         
         if (!isMounted) return;
         
@@ -330,14 +331,15 @@ function LandingPage() {
         // Handle the specific JWT session error
         if (error && error.message?.includes('Session from session_id claim in JWT does not exist')) {
           console.log('Invalid JWT session detected, clearing auth state');
-          supabase.auth.signOut().catch(console.error);
           clearAuthState();
+          setIsInitializing(false);
           return;
         }
         
         if (error) {
           console.error('Auth session error:', error);
           clearAuthState();
+          setIsInitializing(false);
           return;
         }
         
@@ -348,10 +350,13 @@ function LandingPage() {
           clearAuthState();
         }
         
+        setIsInitializing(false);
+        
       } catch (error: any) {
         console.error('Auth initialization error:', error);
         if (isMounted) {
           clearAuthState();
+          setIsInitializing(false);
         }
       }
     };
@@ -364,255 +369,6 @@ function LandingPage() {
       subscription.unsubscribe();
     };
   }, []);
-
-  const handleTimeLoggingSignUp = (timeLoggingData: TimeLoggingData) => {
-    setPendingTimeLog(timeLoggingData);
-    setIsTimeLoggingOpen(false);
-    setIsSignUpOpen(true);
-  };
-
-  const handleTimeLoggingDirect = async (timeLoggingData: TimeLoggingData) => {
-    if (!userProfile) return;
-
-    try {
-      const isValidEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-
-      // Check if the contact is an existing user
-      const { data: existingProfile, error: profileError } = await supabase
-        .from('profiles')
-        .select('id, user_id, email, full_name')
-        .eq('email', timeLoggingData.contact)
-        .single();
-
-      if (existingProfile) {
-        // User exists - create direct time transaction
-        const { error: transactionError } = await supabase
-          .from('time_transactions')
-          .insert({
-            giver_id: timeLoggingData.mode === 'helped' ? userProfile.id : existingProfile.id,
-            receiver_id: timeLoggingData.mode === 'helped' ? existingProfile.id : userProfile.id,
-            hours: timeLoggingData.hours,
-            description: timeLoggingData.description,
-            logged_by: userProfile.id,
-            status: 'pending'
-          });
-
-        if (transactionError) throw transactionError;
-
-        alert('Time logged successfully! The other person will be notified to confirm.');
-      } else {
-        // User doesn't exist - create invitation and pending time log
-        const { data: invitationData, error: invitationError } = await supabase
-          .rpc('create_invitation_with_time_log', {
-            p_inviter_profile_id: userProfile.id,
-            p_invitee_email: isValidEmail(timeLoggingData.contact) ? timeLoggingData.contact : '',
-            p_invitee_name: timeLoggingData.name,
-            p_invitee_contact: timeLoggingData.contact,
-            p_hours: timeLoggingData.hours,
-            p_description: timeLoggingData.description,
-            p_service_type: 'general',
-            p_mode: timeLoggingData.mode
-          });
-
-        if (invitationError) throw invitationError;
-
-        alert(`Invitation sent to ${timeLoggingData.name}! They'll receive an email to join Yard and confirm the time log.`);
-      }
-
-      setIsTimeLoggingOpen(false);
-    } catch (error) {
-      console.error('Error logging time:', error);
-      alert('Error logging time. Please try again.');
-    }
-  };
-
-  const handleSignUpSuccess = () => {
-    setIsSignUpOpen(false);
-    setPendingTimeLog(undefined);
-    navigate('/dashboard');
-  };
-
-  const handleSignUpClose = () => {
-    setIsSignUpOpen(false);
-  };
-
-  const handleHeaderSignUpSuccess = () => {
-    navigate('/dashboard');
-  };
-
-  const handleHeaderSignInSuccess = () => {
-    navigate('/dashboard');
-  };
-
-  const handleSubmitRequest = (searchParams: SearchParams) => {
-    // Navigate to browse page with search parameters as URL params
-    const params = new URLSearchParams({
-      query: searchParams.query,
-      serviceType: searchParams.serviceType,
-      deliverableFormat: searchParams.deliverableFormat,
-      timeline: searchParams.timeline,
-      industry: searchParams.industry,
-      timeEstimate: searchParams.timeEstimate,
-      companyStage: searchParams.companyStage
-    });
-    
-    navigate(`/browse?${params.toString()}`);
-  };
-
-  const handleSignOut = async () => {
-    try {
-      await supabase.auth.signOut();
-      clearAuthState();
-    } catch (error) {
-      console.error('Error signing out:', error);
-      // Still clear state even if signOut fails
-      clearAuthState();
-    }
-  };
-
-  return (
-    <div className="min-h-screen w-full bg-amber-200">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-        <Header 
-          isAuthenticated={isAuthenticated}
-          userProfile={userProfile}
-          showDashboard={false}
-          showFeed={false}
-          onSignUpSuccess={handleHeaderSignUpSuccess}
-          onSignInSuccess={handleHeaderSignInSuccess}
-          onDashboardClick={() => navigate('/dashboard')}
-          onFeedClick={() => navigate('/feed')}
-          onSignOut={handleSignOut}
-        />
-        <main className="mt-16 md:mt-24">
-          {/* Always show Hero section on landing page */}
-          <Hero />
-          
-          {/* Show time logging banner for both authenticated and non-authenticated users */}
-          <TimeLoggingBanner onLogTime={() => setIsTimeLoggingOpen(true)} />
-          
-          <SearchForm
-            searchValue={searchValue}
-            setSearchValue={setSearchValue}
-            onSubmitRequest={handleSubmitRequest}
-          />
-          <ExampleQueries setSearchValue={setSearchValue} />
-        </main>
-        <Footer />
-      </div>
-      
-      <TimeLoggingModal
-        isOpen={isTimeLoggingOpen}
-        onClose={() => setIsTimeLoggingOpen(false)}
-        onSignUp={handleTimeLoggingSignUp}
-        onLogTime={handleTimeLoggingDirect}
-        isAuthenticated={isAuthenticated}
-      />
-      
-      <SignUpModal
-        isOpen={isSignUpOpen}
-        onClose={handleSignUpClose}
-        timeLoggingData={pendingTimeLog}
-        onSignUpSuccess={handleSignUpSuccess}
-      />
-    </div>
-  );
-}
-
-function MainApp() {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [searchParams] = useSearchParams();
-  const [isInitializing, setIsInitializing] = useState(true);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [userProfile, setUserProfile] = useState<any>(null);
-
-  // Determine current page from URL
-  const currentPage = location.pathname;
-  const isLandingPage = currentPage === '/';
-  const isDashboardPage = currentPage === '/dashboard';
-  const isFeedPage = currentPage === '/feed';
-  const isBrowsePage = currentPage === '/browse';
-
-  // Parse search parameters for browse page
-  const browseSearchParams = isBrowsePage ? {
-    query: searchParams.get('query') || '',
-    serviceType: searchParams.get('serviceType') || '',
-    deliverableFormat: searchParams.get('deliverableFormat') || '',
-    timeline: searchParams.get('timeline') || '',
-    industry: searchParams.get('industry') || '',
-    timeEstimate: searchParams.get('timeEstimate') || '',
-    companyStage: searchParams.get('companyStage') || ''
-  } : undefined;
-
-  // Auth state management for protected routes
-  useEffect(() => {
-    let isMounted = true;
-    
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (!isMounted) return;
-        
-        if (event === 'SIGNED_IN' && session?.user) {
-          setIsAuthenticated(true);
-          // Get profile from localStorage or fetch it
-          const storedProfile = localStorage.getItem('userProfile');
-          if (storedProfile) {
-            setUserProfile(JSON.parse(storedProfile));
-          }
-        } else if (event === 'SIGNED_OUT') {
-          setIsAuthenticated(false);
-          setUserProfile(null);
-          // Redirect to landing page if on protected route
-          if (isDashboardPage || isFeedPage) {
-            navigate('/');
-          }
-        }
-        
-        setIsInitializing(false);
-      }
-    );
-
-    const initAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        
-        if (session?.user) {
-          setIsAuthenticated(true);
-          const storedProfile = localStorage.getItem('userProfile');
-          if (storedProfile) {
-            setUserProfile(JSON.parse(storedProfile));
-          }
-        } else {
-          setIsAuthenticated(false);
-          setUserProfile(null);
-        }
-      } catch (error) {
-        console.error('Auth initialization error:', error);
-        setIsAuthenticated(false);
-        setUserProfile(null);
-      } finally {
-        setIsInitializing(false);
-      }
-    };
-
-    initAuth();
-
-    return () => {
-      isMounted = false;
-      subscription.unsubscribe();
-    };
-  }, [navigate, isDashboardPage, isFeedPage]);
-
-  const handleSignOut = async () => {
-    try {
-      await supabase.auth.signOut();
-      navigate('/');
-    } catch (error) {
-      console.error('Error signing out:', error);
-      navigate('/');
-    }
-  };
 
   // Show loading screen during initialization
   if (isInitializing) {
@@ -627,58 +383,81 @@ function MainApp() {
     );
   }
 
-  // Protected route checks
-  if (!isAuthenticated && (isDashboardPage || isFeedPage)) {
-    navigate('/');
-    return null;
-  }
-
-  // Route-specific components
-  if (isBrowsePage) {
-    return (
-      <BrowseNetwork 
-        onBack={() => navigate('/')}
-        onFeedClick={() => navigate('/feed')}
-        onDashboardClick={() => navigate('/dashboard')}
-        onSignOut={handleSignOut}
-        searchParams={browseSearchParams}
-      />
-    );
-  }
-
-  if (isFeedPage && isAuthenticated) {
-    return (
-      <Feed 
-        onBack={() => navigate('/')} 
-        onDashboardClick={() => navigate('/dashboard')}
-        onSignOut={handleSignOut}
-      />
-    );
-  }
-
-  if (isDashboardPage && isAuthenticated) {
-    return (
-      <Dashboard 
-        onBack={() => navigate('/')} 
-        onFeedClick={() => navigate('/feed')}
-        onBrowseNetworkClick={() => navigate('/browse')}
-      />
-    );
-  }
-
-  // Default to landing page
-  return <LandingPage />;
-}
-
-function App() {
   return (
     <Router>
       <Routes>
         <Route path="/invite/:token" element={<InviteSignUpPage />} />
-        <Route path="/dashboard" element={<MainApp />} />
-        <Route path="/feed" element={<MainApp />} />
-        <Route path="/browse" element={<MainApp />} />
-        <Route path="/" element={<MainApp />} />
+        <Route 
+          path="/" 
+          element={
+            <LandingPage 
+              isAuthenticated={isAuthenticated}
+              userProfile={userProfile}
+              isTimeLoggingOpen={isTimeLoggingOpen}
+              setIsTimeLoggingOpen={setIsTimeLoggingOpen}
+              isSignUpOpen={isSignUpOpen}
+              setIsSignUpOpen={setIsSignUpOpen}
+              isSignInOpen={isSignInOpen}
+              setIsSignInOpen={setIsSignInOpen}
+              pendingTimeLog={pendingTimeLog}
+              setPendingTimeLog={setPendingTimeLog}
+              onAuthSuccess={handleAuthSuccess}
+              onSignOut={handleSignOut}
+            />
+          } 
+        />
+        <Route 
+          path="/browse" 
+          element={
+            <BrowseNetwork 
+              onBack={() => window.location.href = '/'}
+              onFeedClick={() => window.location.href = '/feed'}
+              onDashboardClick={() => window.location.href = '/dashboard'}
+              onSignOut={handleSignOut}
+              isAuthenticated={isAuthenticated}
+              onPromptSignIn={() => setIsSignInOpen(true)}
+            />
+          } 
+        />
+        <Route 
+          path="/feed" 
+          element={
+            <Feed 
+              onBack={() => window.location.href = '/'} 
+              onDashboardClick={() => window.location.href = '/dashboard'}
+              onSignOut={handleSignOut}
+            />
+          } 
+        />
+        <Route 
+          path="/dashboard" 
+          element={
+            <Dashboard 
+              onBack={() => window.location.href = '/'} 
+              onFeedClick={() => window.location.href = '/feed'}
+              onBrowseNetworkClick={() => window.location.href = '/browse'}
+            />
+          } 
+        />
+        <Route 
+          path="/*" 
+          element={
+            <MainApp 
+              isAuthenticated={isAuthenticated}
+              userProfile={userProfile}
+              isTimeLoggingOpen={isTimeLoggingOpen}
+              setIsTimeLoggingOpen={setIsTimeLoggingOpen}
+              isSignUpOpen={isSignUpOpen}
+              setIsSignUpOpen={setIsSignUpOpen}
+              isSignInOpen={isSignInOpen}
+              setIsSignInOpen={setIsSignInOpen}
+              pendingTimeLog={pendingTimeLog}
+              setPendingTimeLog={setPendingTimeLog}
+              onAuthSuccess={handleAuthSuccess}
+              onSignOut={handleSignOut}
+            />
+          } 
+        />
       </Routes>
     </Router>
   );

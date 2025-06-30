@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, Filter, MapPin, Users, ChevronDown, X, DollarSign, Calendar, Target, CheckCircle, ExternalLink, Github, Linkedin, Twitter, Globe, Bot, UserCheck, MessageCircle, Loader2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useSearchParams } from 'react-router-dom';
 import AuthenticatedHeader from './AuthenticatedHeader';
 import ProfileModal from './ProfileModal';
 
@@ -29,16 +30,6 @@ interface NetworkUser {
   platform?: string;
 }
 
-interface SearchParams {
-  query?: string;
-  serviceType?: string;
-  deliverableFormat?: string;
-  timeline?: string;
-  industry?: string;
-  timeEstimate?: string;
-  companyStage?: string;
-}
-
 interface FilterState {
   serviceType: string;
   deliverableFormat: string;
@@ -54,13 +45,22 @@ interface BrowseNetworkProps {
   onFeedClick: () => void;
   onDashboardClick: () => void;
   onSignOut: () => void;
-  searchParams?: SearchParams;
+  isAuthenticated?: boolean;
+  onPromptSignIn?: () => void;
 }
 
-const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searchParams }: BrowseNetworkProps) => {
+const BrowseNetwork = ({ 
+  onBack, 
+  onFeedClick, 
+  onDashboardClick, 
+  onSignOut, 
+  isAuthenticated = false,
+  onPromptSignIn 
+}: BrowseNetworkProps) => {
+  const [searchParams] = useSearchParams();
   const [users, setUsers] = useState<NetworkUser[]>([]);
   const [filteredUsers, setFilteredUsers] = useState<NetworkUser[]>([]);
-  const [searchQuery, setSearchQuery] = useState(searchParams?.query || '');
+  const [searchQuery, setSearchQuery] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
@@ -79,16 +79,34 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
     hasMore: true,
     totalCount: 0
   });
+
+  // Parse search parameters from URL
+  const urlSearchParams = {
+    query: searchParams.get('query') || '',
+    serviceType: searchParams.get('serviceType') || '',
+    deliverableFormat: searchParams.get('deliverableFormat') || '',
+    timeline: searchParams.get('timeline') || '',
+    industry: searchParams.get('industry') || '',
+    timeEstimate: searchParams.get('timeEstimate') || '',
+    companyStage: searchParams.get('companyStage') || ''
+  };
   
   const [filters, setFilters] = useState<FilterState>({
-    serviceType: searchParams?.serviceType || '',
-    deliverableFormat: searchParams?.deliverableFormat || '',
-    timeline: searchParams?.timeline || '',
-    industry: searchParams?.industry || '',
-    timeEstimate: searchParams?.timeEstimate || '',
-    companyStage: searchParams?.companyStage || '',
+    serviceType: urlSearchParams.serviceType,
+    deliverableFormat: urlSearchParams.deliverableFormat,
+    timeline: urlSearchParams.timeline,
+    industry: urlSearchParams.industry,
+    timeEstimate: urlSearchParams.timeEstimate,
+    companyStage: urlSearchParams.companyStage,
     profileType: ''
   });
+
+  // Set initial search query from URL
+  useEffect(() => {
+    if (urlSearchParams.query) {
+      setSearchQuery(urlSearchParams.query);
+    }
+  }, []);
 
   // Landing page search parameters - exact same as SearchForm
   const serviceTypes = [
@@ -432,7 +450,25 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
   };
 
   const handleSubmitBounty = async () => {
-    if (!searchParams || !bountyData.budget) return;
+    // Check if user is authenticated first
+    if (!isAuthenticated) {
+      if (onPromptSignIn) {
+        onPromptSignIn();
+      } else {
+        alert('Please sign in to submit a bounty');
+      }
+      return;
+    }
+
+    if (!urlSearchParams.query && !urlSearchParams.serviceType) {
+      alert('No search parameters found to create bounty');
+      return;
+    }
+
+    if (!bountyData.budget) {
+      alert('Please select a budget range');
+      return;
+    }
 
     setIsSubmittingBounty(true);
     
@@ -452,14 +488,14 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
       // Create the bounty using the RPC function
       const { data: bountyId, error } = await supabase.rpc('create_bounty_from_search', {
         p_posted_by: profile.id,
-        p_title: searchParams.query || `${searchParams.serviceType} Request`,
-        p_description: searchParams.query || `Looking for ${searchParams.serviceType?.toLowerCase()} assistance`,
-        p_service_type: searchParams.serviceType || 'Design Critique',
-        p_deliverable_format: searchParams.deliverableFormat || 'Live Consultation',
-        p_timeline: searchParams.timeline || 'Immediate',
-        p_industry: searchParams.industry || 'Technology',
-        p_time_estimate: searchParams.timeEstimate || '1-2 hours',
-        p_company_stage: searchParams.companyStage || 'Pre-seed',
+        p_title: urlSearchParams.query || `${urlSearchParams.serviceType} Request`,
+        p_description: urlSearchParams.query || `Looking for ${urlSearchParams.serviceType?.toLowerCase()} assistance`,
+        p_service_type: urlSearchParams.serviceType || 'Design Critique',
+        p_deliverable_format: urlSearchParams.deliverableFormat || 'Live Consultation',
+        p_timeline: urlSearchParams.timeline || 'Immediate',
+        p_industry: urlSearchParams.industry || 'Technology',
+        p_time_estimate: urlSearchParams.timeEstimate || '1-2 hours',
+        p_company_stage: urlSearchParams.companyStage || 'Pre-seed',
         p_budget_range: bountyData.budget,
         p_requirements: bountyData.description || null
       });
@@ -560,6 +596,9 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
     (filters.companyStage ? 1 : 0) +
     (filters.profileType ? 1 : 0);
 
+  // Check if we have search parameters from URL
+  const hasSearchParams = Object.values(urlSearchParams).some(value => value !== '');
+
   return (
     <div className="min-h-screen w-full bg-amber-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
@@ -576,7 +615,7 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-black mb-2">Browse Network</h1>
           <p className="text-gray-700">
-            {searchParams ? 'Professionals matching your request' : 'Discover professionals in your network'}
+            {hasSearchParams ? 'Professionals matching your request' : 'Discover professionals in your network'}
           </p>
         </div>
 
@@ -592,44 +631,46 @@ const BrowseNetwork = ({ onBack, onFeedClick, onDashboardClick, onSignOut, searc
         )}
 
         {/* Search Parameters Summary with Bounty Option */}
-        {searchParams && (
+        {hasSearchParams && (
           <div className="bg-white rounded-xl p-4 md:p-6 border border-gray-200 hover:border-gray-300 transition-colors duration-200 mb-6">
             <div className="flex items-start justify-between mb-4">
               <div className="flex-1 min-w-0">
                 <div className="flex flex-col md:flex-row md:items-center gap-2 md:gap-3 mb-2">
                   <h3 className="text-lg font-semibold text-gray-900 break-words">
-                    {searchParams.query || `${searchParams.serviceType} Request`}
+                    {urlSearchParams.query || `${urlSearchParams.serviceType} Request`}
                   </h3>
-                  <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getServiceTypeColor(searchParams.serviceType || '')} self-start`}>
-                    {searchParams.serviceType}
-                  </span>
+                  {urlSearchParams.serviceType && (
+                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getServiceTypeColor(urlSearchParams.serviceType)} self-start`}>
+                      {urlSearchParams.serviceType}
+                    </span>
+                  )}
                 </div>
                 
-                {searchParams.query && (
+                {urlSearchParams.query && (
                   <p className="text-gray-600 text-sm mb-3 break-words">
-                    {searchParams.query}
+                    {urlSearchParams.query}
                   </p>
                 )}
               </div>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-              {searchParams.timeEstimate && (
+              {urlSearchParams.timeEstimate && (
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <Target size={14} className="flex-shrink-0" />
-                  <span className="truncate">{searchParams.timeEstimate}</span>
+                  <span className="truncate">{urlSearchParams.timeEstimate}</span>
                 </div>
               )}
-              {searchParams.timeline && (
+              {urlSearchParams.timeline && (
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <Calendar size={14} className="flex-shrink-0" />
-                  <span className="truncate">{searchParams.timeline}</span>
+                  <span className="truncate">{urlSearchParams.timeline}</span>
                 </div>
               )}
-              {searchParams.deliverableFormat && (
+              {urlSearchParams.deliverableFormat && (
                 <div className="flex items-center gap-2 text-sm text-gray-600">
                   <Target size={14} className="flex-shrink-0" />
-                  <span className="truncate">{searchParams.deliverableFormat}</span>
+                  <span className="truncate">{urlSearchParams.deliverableFormat}</span>
                 </div>
               )}
               <div className="flex items-center gap-2 text-sm text-gray-600">
