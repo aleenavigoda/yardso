@@ -37,7 +37,7 @@ serve(async (req) => {
       inviter_name,
       hours,
       mode,
-      invitation_token
+      invitation_token: invitation_token ? 'present' : 'missing'
     })
 
     if (!invitee_email || !invitee_name || !inviter_name || !hours || !mode || !invitation_token) {
@@ -50,7 +50,18 @@ serve(async (req) => {
         invitation_token: !!invitation_token
       })
       return new Response(
-        JSON.stringify({ error: 'Missing required fields' }),
+        JSON.stringify({ 
+          success: false, 
+          error: 'Missing required fields',
+          received_fields: {
+            invitee_email: !!invitee_email,
+            invitee_name: !!invitee_name,
+            inviter_name: !!inviter_name,
+            hours: !!hours,
+            mode: !!mode,
+            invitation_token: !!invitation_token
+          }
+        }),
         { 
           status: 400, 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -88,7 +99,7 @@ serve(async (req) => {
           <h1 style="font-size: 32px; font-weight: bold; color: black; font-style: italic; margin: 0;">yard</h1>
         </div>
         
-        <h2 style="color: #1f2937; margin-bottom: 20px;">You have been invited to Yard</h2>
+        <h2 style="color: #1f2937; margin-bottom: 20px;">You're invited to join Yard!</h2>
         
         <p style="font-size: 16px; margin-bottom: 15px;">Hi ${invitee_name},</p>
         
@@ -157,13 +168,14 @@ The Yard Team
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: 'Invitation created (email service not configured for development)',
+          message: 'Invitation created successfully! Email service not configured for development.',
           invite_url: inviteUrl,
-          note: 'RESEND_API_KEY not configured - email simulation only',
+          note: 'RESEND_API_KEY not configured - please set up email service in production',
           dev_info: {
             to: invitee_email,
             subject: subject,
-            invite_url: inviteUrl
+            invite_url: inviteUrl,
+            html_preview: htmlContent.substring(0, 200) + '...'
           }
         }),
         { 
@@ -200,9 +212,10 @@ The Yard Team
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: 'Invitation created (email sending failed)',
+          message: 'Invitation created successfully, but email delivery failed.',
           invite_url: inviteUrl,
-          email_error: emailResult.message || 'Unknown email error'
+          email_error: emailResult.message || 'Unknown email error',
+          fallback_message: `Please share this invitation link directly: ${inviteUrl}`
         }),
         { 
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
@@ -215,7 +228,7 @@ The Yard Team
     return new Response(
       JSON.stringify({ 
         success: true, 
-        message: 'Invitation email sent successfully',
+        message: 'Invitation email sent successfully!',
         invite_url: inviteUrl,
         email_id: emailResult.id
       }),
@@ -229,11 +242,13 @@ The Yard Team
     // Don't fail the entire request - the invitation was still created
     return new Response(
       JSON.stringify({ 
-        success: true,
-        message: 'Invitation created (email function error)',
-        email_error: error.message 
+        success: false,
+        message: 'Invitation created but email function encountered an error',
+        email_error: error.message,
+        note: 'The invitation was created successfully in the database'
       }),
       { 
+        status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     )

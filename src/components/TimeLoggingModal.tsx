@@ -129,12 +129,12 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
 
         // Now send the actual email using our edge function
         try {
-          console.log('Calling send-invitation-email function...');
+          console.log('Calling send-invitation-email function with token:', invitationData.invitation_token);
           const { data: emailResult, error: emailError } = await supabase.functions.invoke('send-invitation-email', {
             body: {
               invitee_email: contact,
               invitee_name: name,
-              inviter_name: profile.full_name || profile.display_name || 'A Yard member',
+              inviter_name: invitationData.inviter_name || profile.full_name || profile.display_name || 'A Yard member',
               hours: hours,
               mode: mode,
               invitation_token: invitationData.invitation_token
@@ -147,11 +147,11 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
             console.warn('Invitation created but email failed to send:', emailError);
             setSuccessMessage(`Invitation created for ${name}! However, there was an issue sending the email. Please contact them directly with this link: ${window.location.origin}/invite/${invitationData.invitation_token}`);
           } else {
-            console.log('Email sent successfully:', emailResult);
+            console.log('Email function response:', emailResult);
             if (emailResult.success) {
-              setSuccessMessage(`Invitation sent to ${name}! They'll receive an email to join Yard and confirm the ${hours} hour${hours !== 1 ? 's' : ''} of ${mode === 'helped' ? 'help you provided' : 'help they provided'}.`);
+              setSuccessMessage(emailResult.message || `Invitation sent to ${name}! They'll receive an email to join Yard and confirm the ${hours} hour${hours !== 1 ? 's' : ''} of ${mode === 'helped' ? 'help you provided' : 'help they provided'}.`);
             } else {
-              setSuccessMessage(`Invitation created for ${name}! ${emailResult.message || 'Email sending may have failed, but the invitation is ready.'}`);
+              setSuccessMessage(`Invitation created for ${name}! ${emailResult.message || 'Email sending may have failed, but the invitation is ready.'} ${emailResult.invite_url ? `Share this link: ${emailResult.invite_url}` : ''}`);
             }
           }
         } catch (emailError) {
@@ -172,7 +172,7 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
       setTimeout(() => {
         setSuccessMessage('');
         onClose();
-      }, 5000);
+      }, 6000);
 
     } catch (error: any) {
       console.error('Error logging time:', error);
