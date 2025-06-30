@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { X, User, Mail, Lock, Loader2, CheckCircle, Clock } from 'lucide-react';
+import { X, User, Mail, Lock, Loader2, CheckCircle, Clock, AlertTriangle } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 
 interface InvitationData {
@@ -22,6 +22,7 @@ const InviteSignUpPage = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSigningUp, setIsSigningUp] = useState(false);
   const [error, setError] = useState('');
+  const [debugInfo, setDebugInfo] = useState<any>(null);
   const [formData, setFormData] = useState({
     password: '',
     confirmPassword: ''
@@ -30,13 +31,28 @@ const InviteSignUpPage = () => {
   useEffect(() => {
     if (token) {
       loadInvitation();
+    } else {
+      setError('No invitation token provided');
+      setIsLoading(false);
     }
   }, [token]);
 
   const loadInvitation = async () => {
     try {
       setIsLoading(true);
+      console.log('Loading invitation with token:', token);
       
+      // First, let's debug what we can find about this token
+      const { data: debugResult, error: debugError } = await supabase
+        .rpc('get_invitation_by_token', { p_token: token });
+
+      console.log('Debug result:', debugResult);
+      setDebugInfo(debugResult);
+
+      if (debugError) {
+        console.error('Debug error:', debugError);
+      }
+
       // Fetch invitation details using the token
       const { data: invitationData, error } = await supabase
         .from('invitations')
@@ -52,8 +68,30 @@ const InviteSignUpPage = () => {
         .eq('status', 'pending')
         .single();
 
+      console.log('Invitation data:', invitationData);
+      console.log('Invitation error:', error);
+
       if (error || !invitationData) {
-        setError('Invalid or expired invitation link');
+        // Try to get more info about this token
+        const { data: allInvitations } = await supabase
+          .from('invitations')
+          .select('id, email, status, expires_at, token')
+          .eq('token', token);
+
+        console.log('All invitations with this token:', allInvitations);
+
+        if (allInvitations && allInvitations.length > 0) {
+          const inv = allInvitations[0];
+          if (inv.status !== 'pending') {
+            setError(`This invitation has already been ${inv.status}`);
+          } else if (new Date(inv.expires_at) < new Date()) {
+            setError('This invitation has expired');
+          } else {
+            setError('Unable to load invitation details');
+          }
+        } else {
+          setError('Invalid invitation link');
+        }
         return;
       }
 
@@ -69,6 +107,8 @@ const InviteSignUpPage = () => {
         .select('hours, description, mode')
         .eq('invitation_id', invitationData.id)
         .single();
+
+      console.log('Pending time log:', pendingTimeLog);
 
       setInvitation({
         id: invitationData.id,
@@ -109,6 +149,8 @@ const InviteSignUpPage = () => {
     setError('');
 
     try {
+      console.log('Signing up user:', invitation.invitee_email);
+      
       // Sign up the user
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: invitation.invitee_email,
@@ -121,12 +163,15 @@ const InviteSignUpPage = () => {
       });
 
       if (authError) {
+        console.error('Auth error:', authError);
         throw authError;
       }
 
       if (!authData.user) {
         throw new Error('Failed to create user account');
       }
+
+      console.log('User created successfully:', authData.user.id);
 
       // Mark invitation as accepted
       const { error: updateError } = await supabase
@@ -145,7 +190,7 @@ const InviteSignUpPage = () => {
       // The pending time log will be converted automatically by the database trigger
       
       alert('Account created successfully! Welcome to Yard!');
-      navigate('/dashboard');
+      navigate('/');
 
     } catch (error: any) {
       console.error('Sign up error:', error);
@@ -173,8 +218,20 @@ const InviteSignUpPage = () => {
         <div className="bg-white rounded-3xl p-8 max-w-md w-full text-center">
           <div className="text-2xl font-bold text-black italic mb-6">yard</div>
           <div className="bg-red-50 rounded-xl p-4 border border-red-200 mb-6">
+            <AlertTriangle className="w-8 h-8 text-red-600 mx-auto mb-2" />
             <p className="text-red-800 font-medium">{error}</p>
           </div>
+          
+          {/* Debug information for development */}
+          {debugInfo && (
+            <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 mb-6 text-left">
+              <h4 className="font-medium text-gray-900 mb-2">Debug Info:</h4>
+              <pre className="text-xs text-gray-600 overflow-auto">
+                {JSON.stringify(debugInfo, null, 2)}
+              </pre>
+            </div>
+          )}
+          
           <button
             onClick={() => navigate('/')}
             className="bg-black text-white px-6 py-3 rounded-xl hover:bg-gray-800 transition-colors duration-200"
