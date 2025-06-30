@@ -6,23 +6,26 @@ import { supabase } from '../lib/supabase';
 interface InvitationData {
   id: string;
   inviter_name: string;
-  invitee_name: string;
-  invitee_email: string;
+  email: string;
+  full_name: string;
+  expires_at: string;
+  created_at: string;
+}
+
+interface TimeLogData {
   hours: number;
   mode: string;
   description?: string;
-  expires_at: string;
-  status: string;
 }
 
 const InviteSignUpPage = () => {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();
   const [invitation, setInvitation] = useState<InvitationData | null>(null);
+  const [timeLog, setTimeLog] = useState<TimeLogData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSigningUp, setIsSigningUp] = useState(false);
   const [error, setError] = useState('');
-  const [debugInfo, setDebugInfo] = useState<any>(null);
   const [formData, setFormData] = useState({
     password: '',
     confirmPassword: ''
@@ -42,85 +45,25 @@ const InviteSignUpPage = () => {
       setIsLoading(true);
       console.log('Loading invitation with token:', token);
       
-      // First, let's debug what we can find about this token
-      const { data: debugResult, error: debugError } = await supabase
-        .rpc('get_invitation_by_token', { p_token: token });
+      // Use the new simplified function to get invitation details
+      const { data: invitationDetails, error } = await supabase
+        .rpc('get_invitation_details', { p_token: token });
 
-      console.log('Debug result:', debugResult);
-      setDebugInfo(debugResult);
+      console.log('Invitation details:', invitationDetails);
 
-      if (debugError) {
-        console.error('Debug error:', debugError);
-      }
-
-      // Fetch invitation details using the token
-      const { data: invitationData, error } = await supabase
-        .from('invitations')
-        .select(`
-          id,
-          full_name,
-          email,
-          status,
-          expires_at,
-          inviter:profiles!invitations_inviter_id_fkey(full_name, display_name)
-        `)
-        .eq('token', token)
-        .eq('status', 'pending')
-        .single();
-
-      console.log('Invitation data:', invitationData);
-      console.log('Invitation error:', error);
-
-      if (error || !invitationData) {
-        // Try to get more info about this token
-        const { data: allInvitations } = await supabase
-          .from('invitations')
-          .select('id, email, status, expires_at, token')
-          .eq('token', token);
-
-        console.log('All invitations with this token:', allInvitations);
-
-        if (allInvitations && allInvitations.length > 0) {
-          const inv = allInvitations[0];
-          if (inv.status !== 'pending') {
-            setError(`This invitation has already been ${inv.status}`);
-          } else if (new Date(inv.expires_at) < new Date()) {
-            setError('This invitation has expired');
-          } else {
-            setError('Unable to load invitation details');
-          }
-        } else {
-          setError('Invalid invitation link');
-        }
+      if (error) {
+        console.error('Error loading invitation:', error);
+        setError('Failed to load invitation details');
         return;
       }
 
-      // Check if invitation has expired
-      if (new Date(invitationData.expires_at) < new Date()) {
-        setError('This invitation has expired');
+      if (!invitationDetails.found) {
+        setError(invitationDetails.error || 'Invalid invitation link');
         return;
       }
 
-      // Get pending time log details
-      const { data: pendingTimeLog } = await supabase
-        .from('pending_time_logs')
-        .select('hours, description, mode')
-        .eq('invitation_id', invitationData.id)
-        .single();
-
-      console.log('Pending time log:', pendingTimeLog);
-
-      setInvitation({
-        id: invitationData.id,
-        inviter_name: invitationData.inviter?.full_name || invitationData.inviter?.display_name || 'Someone',
-        invitee_name: invitationData.full_name,
-        invitee_email: invitationData.email,
-        hours: pendingTimeLog?.hours || 1,
-        mode: pendingTimeLog?.mode || 'helped',
-        description: pendingTimeLog?.description,
-        expires_at: invitationData.expires_at,
-        status: invitationData.status
-      });
+      setInvitation(invitationDetails.invitation);
+      setTimeLog(invitationDetails.time_log);
 
     } catch (error) {
       console.error('Error loading invitation:', error);
@@ -149,15 +92,15 @@ const InviteSignUpPage = () => {
     setError('');
 
     try {
-      console.log('Signing up user:', invitation.invitee_email);
+      console.log('Signing up user:', invitation.email);
       
       // Sign up the user
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: invitation.invitee_email,
+        email: invitation.email,
         password: formData.password,
         options: {
           data: {
-            full_name: invitation.invitee_name
+            full_name: invitation.full_name
           }
         }
       });
@@ -173,21 +116,20 @@ const InviteSignUpPage = () => {
 
       console.log('User created successfully:', authData.user.id);
 
-      // Mark invitation as accepted
-      const { error: updateError } = await supabase
-        .from('invitations')
-        .update({
-          status: 'accepted',
-          accepted_at: new Date().toISOString()
-        })
-        .eq('id', invitation.id);
+      // Accept the invitation (this will create the time transaction)
+      const { data: acceptResult, error: acceptError } = await supabase
+        .rpc('accept_invitation', {
+          p_token: token,
+          p_user_id: authData.user.id
+        });
 
-      if (updateError) {
-        console.error('Error updating invitation status:', updateError);
+      if (acceptError) {
+        console.error('Error accepting invitation:', acceptError);
+        // Don't fail the signup for this - the user is created
+        console.warn('Invitation acceptance failed, but user was created');
+      } else {
+        console.log('Invitation accepted:', acceptResult);
       }
-
-      // The user will be automatically signed in and redirected to dashboard
-      // The pending time log will be converted automatically by the database trigger
       
       alert('Account created successfully! Welcome to Yard!');
       navigate('/');
@@ -222,16 +164,6 @@ const InviteSignUpPage = () => {
             <p className="text-red-800 font-medium">{error}</p>
           </div>
           
-          {/* Debug information for development */}
-          {debugInfo && (
-            <div className="bg-gray-50 rounded-xl p-4 border border-gray-200 mb-6 text-left">
-              <h4 className="font-medium text-gray-900 mb-2">Debug Info:</h4>
-              <pre className="text-xs text-gray-600 overflow-auto">
-                {JSON.stringify(debugInfo, null, 2)}
-              </pre>
-            </div>
-          )}
-          
           <button
             onClick={() => navigate('/')}
             className="bg-black text-white px-6 py-3 rounded-xl hover:bg-gray-800 transition-colors duration-200"
@@ -247,7 +179,7 @@ const InviteSignUpPage = () => {
     return null;
   }
 
-  const actionText = invitation.mode === 'helped' ? 'helped you' : 'you helped them';
+  const actionText = timeLog?.mode === 'helped' ? 'helped you' : 'you helped them';
 
   return (
     <div className="min-h-screen w-full bg-amber-200 flex items-center justify-center p-4">
@@ -264,21 +196,23 @@ const InviteSignUpPage = () => {
         </div>
 
         {/* Invitation Details */}
-        <div className="bg-amber-50 rounded-xl p-4 border border-amber-200 mb-6">
-          <div className="text-amber-800 text-sm">
-            <p className="font-medium mb-2">⏰ Time Log Waiting for You</p>
-            <p className="mb-1">
-              <strong>{invitation.inviter_name}</strong> wants to track{' '}
-              <strong>{invitation.hours} hour{invitation.hours !== 1 ? 's' : ''}</strong>{' '}
-              where {actionText}
-            </p>
-            {invitation.description && (
-              <p className="text-amber-700 text-xs mt-2 italic">
-                "{invitation.description}"
+        {timeLog && (
+          <div className="bg-amber-50 rounded-xl p-4 border border-amber-200 mb-6">
+            <div className="text-amber-800 text-sm">
+              <p className="font-medium mb-2">⏰ Time Log Waiting for You</p>
+              <p className="mb-1">
+                <strong>{invitation.inviter_name}</strong> wants to track{' '}
+                <strong>{timeLog.hours} hour{timeLog.hours !== 1 ? 's' : ''}</strong>{' '}
+                where {actionText}
               </p>
-            )}
+              {timeLog.description && (
+                <p className="text-amber-700 text-xs mt-2 italic">
+                  "{timeLog.description}"
+                </p>
+              )}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Sign Up Form */}
         <form onSubmit={handleSignUp} className="space-y-4">
@@ -289,7 +223,7 @@ const InviteSignUpPage = () => {
             </label>
             <input
               type="text"
-              value={invitation.invitee_name}
+              value={invitation.full_name}
               disabled
               className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 text-sm"
             />
@@ -302,7 +236,7 @@ const InviteSignUpPage = () => {
             </label>
             <input
               type="email"
-              value={invitation.invitee_email}
+              value={invitation.email}
               disabled
               className="w-full p-3 border border-gray-200 rounded-xl bg-gray-50 text-gray-600 text-sm"
             />

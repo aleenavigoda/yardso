@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Clock, User, MessageSquare, Plus, Minus, CheckCircle, Loader2 } from 'lucide-react';
+import { X, Clock, User, MessageSquare, Plus, Minus, CheckCircle, Loader2, Copy, ExternalLink } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import type { TimeLoggingData } from '../types';
 
@@ -19,6 +19,7 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
   const [description, setDescription] = useState('');
   const [isLogging, setIsLogging] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [inviteLink, setInviteLink] = useState('');
 
   const timeOptions = [0.5, 1, 1.5, 2, 3, 4, 6, 8];
 
@@ -26,8 +27,21 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   };
 
-  const isValidPhone = (phone: string) => {
-    return /^[\+]?[1-9][\d]{0,15}$/.test(phone.replace(/[\s\-\(\)]/g, ''));
+  const copyToClipboard = async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      alert('Link copied to clipboard!');
+    } catch (err) {
+      console.error('Failed to copy: ', err);
+      // Fallback for older browsers
+      const textArea = document.createElement('textarea');
+      textArea.value = text;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      alert('Link copied to clipboard!');
+    }
   };
 
   const handleSubmit = async () => {
@@ -47,6 +61,7 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
     // If authenticated, handle the time logging
     setIsLogging(true);
     setSuccessMessage('');
+    setInviteLink('');
 
     try {
       // Get current user profile
@@ -95,23 +110,21 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
 
         setSuccessMessage(`Time logged successfully! ${existingProfile.full_name || existingProfile.display_name} will receive a notification to confirm.`);
       } else {
-        // User doesn't exist - create invitation and pending time log
+        // User doesn't exist - create simple invitation
         if (!isValidEmail(contact)) {
           throw new Error('Please provide a valid email address for new users');
         }
 
-        console.log('Creating invitation for new user:', contact);
+        console.log('Creating simple invitation for new user:', contact);
 
-        // Use the RPC function to create invitation and pending time log
+        // Use the simplified RPC function
         const { data: invitationData, error: invitationError } = await supabase
-          .rpc('create_invitation_with_time_log', {
+          .rpc('create_simple_invitation', {
             p_inviter_profile_id: profile.id,
             p_invitee_email: contact,
             p_invitee_name: name,
-            p_invitee_contact: contact,
             p_hours: hours,
             p_description: description || null,
-            p_service_type: 'general',
             p_mode: mode
           });
 
@@ -127,38 +140,11 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
 
         console.log('Invitation created successfully:', invitationData);
 
-        // Now send the actual email using our edge function
-        try {
-          console.log('Calling send-invitation-email function with token:', invitationData.invitation_token);
-          const { data: emailResult, error: emailError } = await supabase.functions.invoke('send-invitation-email', {
-            body: {
-              invitee_email: contact,
-              invitee_name: name,
-              inviter_name: invitationData.inviter_name || profile.full_name || profile.display_name || 'A Yard member',
-              hours: hours,
-              mode: mode,
-              invitation_token: invitationData.invitation_token
-            }
-          });
+        // Generate the actual invite URL
+        const inviteUrl = `${window.location.origin}/invite/${invitationData.invitation_token}`;
+        setInviteLink(inviteUrl);
 
-          if (emailError) {
-            console.error('Email sending error:', emailError);
-            // Don't throw here - the invitation was created successfully
-            console.warn('Invitation created but email failed to send:', emailError);
-            setSuccessMessage(`Invitation created for ${name}! However, there was an issue sending the email. Please contact them directly with this link: ${window.location.origin}/invite/${invitationData.invitation_token}`);
-          } else {
-            console.log('Email function response:', emailResult);
-            if (emailResult.success) {
-              setSuccessMessage(emailResult.message || `Invitation sent to ${name}! They'll receive an email to join Yard and confirm the ${hours} hour${hours !== 1 ? 's' : ''} of ${mode === 'helped' ? 'help you provided' : 'help they provided'}.`);
-            } else {
-              setSuccessMessage(`Invitation created for ${name}! ${emailResult.message || 'Email sending may have failed, but the invitation is ready.'} ${emailResult.invite_url ? `Share this link: ${emailResult.invite_url}` : ''}`);
-            }
-          }
-        } catch (emailError) {
-          console.error('Email function error:', emailError);
-          // Don't throw here - the invitation was created successfully
-          setSuccessMessage(`Invitation created for ${name}! There was an issue with email delivery, but you can share this link directly: ${window.location.origin}/invite/${invitationData.invitation_token}`);
-        }
+        setSuccessMessage(`Invitation created for ${name}! Share the link below for them to join Yard and confirm the time log.`);
       }
 
       // Reset form
@@ -171,8 +157,9 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
       // Close modal after showing success message
       setTimeout(() => {
         setSuccessMessage('');
+        setInviteLink('');
         onClose();
-      }, 6000);
+      }, 8000);
 
     } catch (error: any) {
       console.error('Error logging time:', error);
@@ -198,6 +185,7 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
     setContact('');
     setDescription('');
     setSuccessMessage('');
+    setInviteLink('');
   };
 
   const handleClose = () => {
@@ -205,7 +193,7 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
     onClose();
   };
 
-  const isFormValid = name.trim() !== '' && contact.trim() !== '' && (isValidEmail(contact) || (!isAuthenticated && isValidPhone(contact)));
+  const isFormValid = name.trim() !== '' && contact.trim() !== '' && isValidEmail(contact);
 
   if (!isOpen) return null;
 
@@ -249,9 +237,39 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
             <div className="bg-green-50 rounded-xl p-4 border border-green-200">
               <div className="flex items-start gap-2">
                 <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
-                <div>
+                <div className="flex-1">
                   <p className="text-green-800 text-sm font-medium mb-1">Success!</p>
-                  <p className="text-green-700 text-sm">{successMessage}</p>
+                  <p className="text-green-700 text-sm mb-3">{successMessage}</p>
+                  
+                  {inviteLink && (
+                    <div className="bg-white rounded-lg p-3 border border-green-200">
+                      <p className="text-green-800 text-xs font-medium mb-2">Share this invitation link:</p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={inviteLink}
+                          readOnly
+                          className="flex-1 text-xs bg-gray-50 border border-gray-200 rounded px-2 py-1 font-mono"
+                        />
+                        <button
+                          onClick={() => copyToClipboard(inviteLink)}
+                          className="flex items-center gap-1 bg-green-600 text-white px-2 py-1 rounded text-xs hover:bg-green-700 transition-colors"
+                        >
+                          <Copy size={12} />
+                          Copy
+                        </button>
+                        <a
+                          href={inviteLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 bg-blue-600 text-white px-2 py-1 rounded text-xs hover:bg-blue-700 transition-colors"
+                        >
+                          <ExternalLink size={12} />
+                          Open
+                        </a>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -302,21 +320,19 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
                 type="text"
                 value={contact}
                 onChange={(e) => setContact(e.target.value)}
-                placeholder={isAuthenticated ? "Email address" : "Email or phone number"}
+                placeholder="Email address"
                 className="w-full p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200 text-sm"
                 disabled={isLogging}
               />
               <p className="text-xs text-gray-500 mt-1">
                 {isAuthenticated ? (
                   isValidEmail(contact) 
-                    ? "We'll check if they're on Yard or send them an invitation email"
+                    ? "We'll check if they're on Yard or create an invitation link"
                     : "Please enter a valid email address"
                 ) : (
                   isValidEmail(contact) 
-                    ? "They'll receive an email invitation to join Yard and confirm"
-                    : isValidPhone(contact)
-                    ? "They'll receive an SMS invitation to join Yard and confirm"
-                    : "Enter a valid email address or phone number"
+                    ? "They'll receive an invitation to join Yard and confirm"
+                    : "Enter a valid email address"
                 )}
               </p>
             </div>
@@ -405,7 +421,7 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
           
           <p className="text-center text-xs text-gray-500">
             {isAuthenticated 
-              ? "They'll get notified to confirm this time entry"
+              ? "They'll get an invitation link to join and confirm this time entry"
               : "They'll get an invite to join your workyard and confirm this time entry"
             }
           </p>
