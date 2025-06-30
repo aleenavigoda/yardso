@@ -58,8 +58,15 @@ serve(async (req) => {
       )
     }
 
-    // Create a custom invitation URL that goes to our signup page with the token
-    const siteUrl = Deno.env.get('SITE_URL') || 'http://localhost:5173'
+    // Get the site URL from environment or use localhost:5173 for development
+    let siteUrl = Deno.env.get('SITE_URL')
+    
+    if (!siteUrl) {
+      // Default to localhost:5173 for development
+      siteUrl = 'http://localhost:5173'
+      console.log('⚠️ SITE_URL not set, using default:', siteUrl)
+    }
+    
     const inviteUrl = `${siteUrl}/invite/${invitation_token}`
 
     console.log('🔗 Generated invite URL:', inviteUrl)
@@ -134,50 +141,47 @@ The Yard Team
     console.log('📝 Generated email content for:', invitee_email)
     console.log('📧 Subject:', subject)
 
-    // Use Supabase's built-in email functionality
-    // This will use the email templates configured in your Supabase dashboard
-    const { createClient } = await import('npm:@supabase/supabase-js@2')
+    // Get Resend API key from environment
+    const resendApiKey = Deno.env.get('RESEND_API_KEY')
     
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false
-      }
-    })
-
-    // Send the email using Supabase Auth's invite functionality
-    // This will trigger the "Invite user" email template in your Supabase dashboard
-    const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
-      invitee_email,
-      {
-        data: {
-          full_name: invitee_name,
-          inviter_name: inviter_name,
-          hours: hours,
-          mode: mode,
-          action_text: actionText,
-          invitation_token: invitation_token
-        },
-        redirectTo: inviteUrl
-      }
-    )
-
-    if (inviteError) {
-      console.error('❌ Supabase invite error:', inviteError)
-      throw new Error(`Failed to send invitation email: ${inviteError.message}`)
+    if (!resendApiKey) {
+      console.error('❌ RESEND_API_KEY not found in environment')
+      throw new Error('Email service not configured')
     }
 
-    console.log('✅ Email sent successfully via Supabase:', inviteData)
+    console.log('📮 Sending email via Resend API...')
+
+    // Send email using Resend API
+    const emailResponse = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${resendApiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        from: 'Yard <noreply@yard.app>',
+        to: [invitee_email],
+        subject: subject,
+        html: htmlContent,
+        text: textContent
+      })
+    })
+
+    const emailResult = await emailResponse.json()
+
+    if (!emailResponse.ok) {
+      console.error('❌ Resend API error:', emailResult)
+      throw new Error(`Email sending failed: ${emailResult.message || 'Unknown error'}`)
+    }
+
+    console.log('✅ Email sent successfully via Resend:', emailResult)
 
     return new Response(
       JSON.stringify({ 
         success: true, 
         message: 'Invitation email sent successfully',
         invite_url: inviteUrl,
-        email_id: inviteData?.user?.id
+        email_id: emailResult.id
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
