@@ -55,41 +55,18 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
 
       const { data: profile } = await supabase
         .from('profiles')
-        .select('id, full_name')
+        .select('id, full_name, display_name')
         .eq('user_id', user.id)
         .single();
 
       if (!profile) throw new Error('Profile not found');
 
-      // Always use the invitation system - this ensures proper email notifications
-      // and approval workflow for both existing and new users
-      const { data: invitationData, error: invitationError } = await supabase
-        .rpc('create_invitation_with_time_log', {
-          p_inviter_profile_id: profile.id,
-          p_invitee_email: isValidEmail(contact) ? contact : '',
-          p_invitee_name: name,
-          p_invitee_contact: contact,
-          p_hours: hours,
-          p_description: description || null,
-          p_service_type: 'general',
-          p_mode: mode
-        });
-
-      if (invitationError) throw invitationError;
-
-      if (!invitationData.success) {
-        throw new Error(invitationData.error || 'Failed to create invitation');
-      }
-
-      // Send email/SMS notification
-      await sendInvitationNotification(contact, name, profile.full_name, hours, mode);
-
-      // Check if this is an existing user to customize the message
+      // Check if the contact is an existing user by email
       let existingProfile = null;
       if (isValidEmail(contact)) {
         const { data: existingUser } = await supabase
           .from('profiles')
-          .select('id, full_name')
+          .select('id, user_id, email, full_name, display_name')
           .eq('email', contact)
           .single();
         
@@ -97,9 +74,95 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
       }
 
       if (existingProfile) {
-        setSuccessMessage(`Time logged successfully! ${existingProfile.full_name} will receive an email notification to confirm.`);
+        // User exists - create direct time transaction
+        const { error: transactionError } = await supabase
+          .from('time_transactions')
+          .insert({
+            giver_id: mode === 'helped' ? profile.id : existingProfile.id,
+            receiver_id: mode === 'helped' ? existingProfile.id : profile.id,
+            hours: hours,
+            description: description || null,
+            service_type: 'general',
+            logged_by: profile.id,
+            status: 'pending'
+          });
+
+        if (transactionError) throw transactionError;
+
+        setSuccessMessage(`Time logged successfully! ${existingProfile.full_name || existingProfile.display_name} will receive a notification to confirm.`);
       } else {
-        setSuccessMessage(`Invitation sent to ${name}! They'll receive a ${isValidEmail(contact) ? 'email' : 'text'} to join Yard and confirm the time log.`);
+        // User doesn't exist - send invitation using Supabase Auth
+        if (!isValidEmail(contact)) {
+          throw new Error('Please provide a valid email address for new users');
+        }
+
+        // Create invitation using Supabase Auth admin API
+        const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
+          contact,
+          {
+            data: {
+              full_name: name,
+              invited_by: profile.full_name || profile.display_name,
+              time_log_data: {
+                mode,
+                hours,
+                description,
+                inviter_profile_id: profile.id,
+                inviter_name: profile.full_name || profile.display_name
+              }
+            },
+            redirectTo: `${window.location.origin}/accept-invite`
+          }
+        );
+
+        if (inviteError) {
+          console.error('Invite error:', inviteError);
+          
+          // Fallback: Create manual invitation record and pending time log
+          const { data: invitationData, error: invitationError } = await supabase
+            .rpc('create_invitation_with_time_log', {
+              p_inviter_profile_id: profile.id,
+              p_invitee_email: contact,
+              p_invitee_name: name,
+              p_invitee_contact: contact,
+              p_hours: hours,
+              p_description: description || null,
+              p_service_type: 'general',
+              p_mode: mode
+            });
+
+          if (invitationError) throw invitationError;
+
+          if (!invitationData.success) {
+            throw new Error(invitationData.error || 'Failed to create invitation');
+          }
+
+          setSuccessMessage(`Invitation sent to ${name}! They'll receive an email to join Yard and confirm the ${hours} hour${hours !== 1 ? 's' : ''} of ${mode === 'helped' ? 'help you provided' : 'help they provided'}.`);
+        } else {
+          // Supabase invitation was successful
+          console.log('Supabase invitation sent:', inviteData);
+          
+          // Also create a pending time log record for when they sign up
+          const { error: pendingLogError } = await supabase
+            .from('pending_time_logs')
+            .insert({
+              logger_profile_id: profile.id,
+              invitee_email: contact,
+              invitee_name: name,
+              invitee_contact: contact,
+              hours: hours,
+              description: description || null,
+              service_type: 'general',
+              mode: mode,
+              status: 'pending'
+            });
+
+          if (pendingLogError) {
+            console.warn('Failed to create pending time log:', pendingLogError);
+          }
+
+          setSuccessMessage(`Invitation sent to ${name}! They'll receive an email to join Yard and confirm the ${hours} hour${hours !== 1 ? 's' : ''} of ${mode === 'helped' ? 'help you provided' : 'help they provided'}.`);
+        }
       }
 
       // Reset form
@@ -113,37 +176,22 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
       setTimeout(() => {
         setSuccessMessage('');
         onClose();
-      }, 3000);
+      }, 4000);
 
     } catch (error: any) {
       console.error('Error logging time:', error);
       setSuccessMessage('');
-      alert('Error logging time. Please try again.');
+      
+      // Show user-friendly error messages
+      if (error.message.includes('email')) {
+        alert('Please provide a valid email address for new users.');
+      } else if (error.message.includes('User not found')) {
+        alert('Unable to find your profile. Please try signing out and back in.');
+      } else {
+        alert('Error logging time. Please try again.');
+      }
     } finally {
       setIsLogging(false);
-    }
-  };
-
-  const sendInvitationNotification = async (contact: string, name: string, inviterName: string, hours: number, mode: string) => {
-    try {
-      // In a real app, this would trigger an email/SMS service
-      // For now, we'll call an edge function to handle notifications
-      const { error } = await supabase.functions.invoke('send-invitation', {
-        body: {
-          contact,
-          name,
-          inviterName,
-          hours,
-          mode,
-          type: isValidEmail(contact) ? 'email' : 'sms'
-        }
-      });
-
-      if (error) {
-        console.warn('Failed to send invitation notification:', error);
-      }
-    } catch (error) {
-      console.warn('Failed to send invitation notification:', error);
     }
   };
 
@@ -161,7 +209,7 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
     onClose();
   };
 
-  const isFormValid = name.trim() !== '' && contact.trim() !== '' && (isValidEmail(contact) || isValidPhone(contact));
+  const isFormValid = name.trim() !== '' && contact.trim() !== '' && (isValidEmail(contact) || (!isAuthenticated && isValidPhone(contact)));
 
   if (!isOpen) return null;
 
@@ -202,10 +250,13 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
           )}
 
           {successMessage && (
-            <div className="bg-green-50 rounded-xl p-3 border border-green-200">
+            <div className="bg-green-50 rounded-xl p-4 border border-green-200">
               <div className="flex items-start gap-2">
-                <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                <p className="text-green-800 text-sm">{successMessage}</p>
+                <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="text-green-800 text-sm font-medium mb-1">Success!</p>
+                  <p className="text-green-700 text-sm">{successMessage}</p>
+                </div>
               </div>
             </div>
           )}
@@ -255,17 +306,22 @@ const TimeLoggingModal = ({ isOpen, onClose, onSignUp, onLogTime, isAuthenticate
                 type="text"
                 value={contact}
                 onChange={(e) => setContact(e.target.value)}
-                placeholder="Email or phone number"
+                placeholder={isAuthenticated ? "Email address" : "Email or phone number"}
                 className="w-full p-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200 text-sm"
                 disabled={isLogging}
               />
               <p className="text-xs text-gray-500 mt-1">
-                {isValidEmail(contact) 
-                  ? "They'll receive an email notification to confirm the time log"
-                  : isValidPhone(contact)
-                  ? "They'll receive an SMS invitation to join Yard and confirm"
-                  : "Enter a valid email address or phone number"
-                }
+                {isAuthenticated ? (
+                  isValidEmail(contact) 
+                    ? "We'll check if they're on Yard or send them an invitation email"
+                    : "Please enter a valid email address"
+                ) : (
+                  isValidEmail(contact) 
+                    ? "They'll receive an email invitation to join Yard and confirm"
+                    : isValidPhone(contact)
+                    ? "They'll receive an SMS invitation to join Yard and confirm"
+                    : "Enter a valid email address or phone number"
+                )}
               </p>
             </div>
 

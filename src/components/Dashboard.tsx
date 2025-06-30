@@ -212,22 +212,74 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
 
         alert('Time logged successfully! The other person will be notified to confirm.');
       } else {
-        // User doesn't exist - create invitation and pending time log
-        const { data: invitationData, error: invitationError } = await supabase
-          .rpc('create_invitation_with_time_log', {
-            p_inviter_profile_id: profile.id,
-            p_invitee_email: isValidEmail(timeLogForm.contact) ? timeLogForm.contact : '',
-            p_invitee_name: timeLogForm.name,
-            p_invitee_contact: timeLogForm.contact,
-            p_hours: timeLogForm.hours,
-            p_description: timeLogForm.description,
-            p_service_type: 'general',
-            p_mode: timeLogForm.mode
-          });
+        // User doesn't exist - send invitation using Supabase Auth
+        if (!isValidEmail(timeLogForm.contact)) {
+          throw new Error('Please provide a valid email address for new users');
+        }
 
-        if (invitationError) throw invitationError;
+        // Create invitation using Supabase Auth admin API
+        const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
+          timeLogForm.contact,
+          {
+            data: {
+              full_name: timeLogForm.name,
+              invited_by: profile.full_name || profile.display_name,
+              time_log_data: {
+                mode: timeLogForm.mode,
+                hours: timeLogForm.hours,
+                description: timeLogForm.description,
+                inviter_profile_id: profile.id,
+                inviter_name: profile.full_name || profile.display_name
+              }
+            },
+            redirectTo: `${window.location.origin}/accept-invite`
+          }
+        );
 
-        alert(`Invitation sent to ${timeLogForm.name}! They'll receive an email to join Yard and confirm the time log.`);
+        if (inviteError) {
+          console.error('Invite error:', inviteError);
+          
+          // Fallback: Create manual invitation record and pending time log
+          const { data: invitationData, error: invitationError } = await supabase
+            .rpc('create_invitation_with_time_log', {
+              p_inviter_profile_id: profile.id,
+              p_invitee_email: timeLogForm.contact,
+              p_invitee_name: timeLogForm.name,
+              p_invitee_contact: timeLogForm.contact,
+              p_hours: timeLogForm.hours,
+              p_description: timeLogForm.description,
+              p_service_type: 'general',
+              p_mode: timeLogForm.mode
+            });
+
+          if (invitationError) throw invitationError;
+
+          alert(`Invitation sent to ${timeLogForm.name}! They'll receive an email to join Yard and confirm the time log.`);
+        } else {
+          // Supabase invitation was successful
+          console.log('Supabase invitation sent:', inviteData);
+          
+          // Also create a pending time log record for when they sign up
+          const { error: pendingLogError } = await supabase
+            .from('pending_time_logs')
+            .insert({
+              logger_profile_id: profile.id,
+              invitee_email: timeLogForm.contact,
+              invitee_name: timeLogForm.name,
+              invitee_contact: timeLogForm.contact,
+              hours: timeLogForm.hours,
+              description: timeLogForm.description || null,
+              service_type: 'general',
+              mode: timeLogForm.mode,
+              status: 'pending'
+            });
+
+          if (pendingLogError) {
+            console.warn('Failed to create pending time log:', pendingLogError);
+          }
+
+          alert(`Invitation sent to ${timeLogForm.name}! They'll receive an email to join Yard and confirm the time log.`);
+        }
       }
 
       // Clear the pending time log
@@ -243,7 +295,11 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
       
     } catch (error) {
       console.error('Error logging time:', error);
-      alert('Error logging time. Please try again.');
+      if (error.message.includes('email')) {
+        alert('Please provide a valid email address for new users.');
+      } else {
+        alert('Error logging time. Please try again.');
+      }
     } finally {
       setIsLoggingTime(false);
     }
@@ -321,22 +377,74 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
 
         alert('Time logged successfully! The other person will be notified to confirm.');
       } else {
-        // User doesn't exist - create invitation and pending time log
-        const { data: invitationData, error: invitationError } = await supabase
-          .rpc('create_invitation_with_time_log', {
-            p_inviter_profile_id: profile.id,
-            p_invitee_email: isValidEmail(timeLoggingData.contact) ? timeLoggingData.contact : '',
-            p_invitee_name: timeLoggingData.name,
-            p_invitee_contact: timeLoggingData.contact,
-            p_hours: timeLoggingData.hours,
-            p_description: timeLoggingData.description,
-            p_service_type: 'general',
-            p_mode: timeLoggingData.mode
-          });
+        // User doesn't exist - send invitation using Supabase Auth
+        if (!isValidEmail(timeLoggingData.contact)) {
+          throw new Error('Please provide a valid email address for new users');
+        }
 
-        if (invitationError) throw invitationError;
+        // Create invitation using Supabase Auth admin API
+        const { data: inviteData, error: inviteError } = await supabase.auth.admin.inviteUserByEmail(
+          timeLoggingData.contact,
+          {
+            data: {
+              full_name: timeLoggingData.name,
+              invited_by: profile.full_name || profile.display_name,
+              time_log_data: {
+                mode: timeLoggingData.mode,
+                hours: timeLoggingData.hours,
+                description: timeLoggingData.description,
+                inviter_profile_id: profile.id,
+                inviter_name: profile.full_name || profile.display_name
+              }
+            },
+            redirectTo: `${window.location.origin}/accept-invite`
+          }
+        );
 
-        alert(`Invitation sent to ${timeLoggingData.name}! They'll receive an email to join Yard and confirm the time log.`);
+        if (inviteError) {
+          console.error('Invite error:', inviteError);
+          
+          // Fallback: Create manual invitation record and pending time log
+          const { data: invitationData, error: invitationError } = await supabase
+            .rpc('create_invitation_with_time_log', {
+              p_inviter_profile_id: profile.id,
+              p_invitee_email: timeLoggingData.contact,
+              p_invitee_name: timeLoggingData.name,
+              p_invitee_contact: timeLoggingData.contact,
+              p_hours: timeLoggingData.hours,
+              p_description: timeLoggingData.description,
+              p_service_type: 'general',
+              p_mode: timeLoggingData.mode
+            });
+
+          if (invitationError) throw invitationError;
+
+          alert(`Invitation sent to ${timeLoggingData.name}! They'll receive an email to join Yard and confirm the time log.`);
+        } else {
+          // Supabase invitation was successful
+          console.log('Supabase invitation sent:', inviteData);
+          
+          // Also create a pending time log record for when they sign up
+          const { error: pendingLogError } = await supabase
+            .from('pending_time_logs')
+            .insert({
+              logger_profile_id: profile.id,
+              invitee_email: timeLoggingData.contact,
+              invitee_name: timeLoggingData.name,
+              invitee_contact: timeLoggingData.contact,
+              hours: timeLoggingData.hours,
+              description: timeLoggingData.description || null,
+              service_type: 'general',
+              mode: timeLoggingData.mode,
+              status: 'pending'
+            });
+
+          if (pendingLogError) {
+            console.warn('Failed to create pending time log:', pendingLogError);
+          }
+
+          alert(`Invitation sent to ${timeLoggingData.name}! They'll receive an email to join Yard and confirm the time log.`);
+        }
       }
 
       setIsTimeLoggingOpen(false);
@@ -344,7 +452,11 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
       await loadPendingTransactions();
     } catch (error) {
       console.error('Error logging time:', error);
-      alert('Error logging time. Please try again.');
+      if (error.message.includes('email')) {
+        alert('Please provide a valid email address for new users.');
+      } else {
+        alert('Error logging time. Please try again.');
+      }
     }
   };
 
@@ -557,14 +669,14 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
                       type="text"
                       value={timeLogForm.contact}
                       onChange={(e) => setTimeLogForm({ ...timeLogForm, contact: e.target.value })}
-                      placeholder="Email or phone"
+                      placeholder="Email address"
                       className="w-full pl-4 pr-4 py-3 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 transition-all duration-200 text-sm"
                     />
                   </div>
                   <p className="text-xs text-gray-500 mt-1">
                     {isValidEmail(timeLogForm.contact) 
                       ? "We'll check if they're already on Yard or send an invitation"
-                      : "Phone numbers will receive SMS invitations"
+                      : "Please enter a valid email address"
                     }
                   </p>
                 </div>
@@ -602,7 +714,7 @@ const Dashboard = ({ onBack, onFeedClick, onBrowseNetworkClick }: DashboardProps
                 </button>
                 <button
                   onClick={handleLogTime}
-                  disabled={isLoggingTime || !timeLogForm.contact.trim() || !timeLogForm.name.trim()}
+                  disabled={isLoggingTime || !timeLogForm.contact.trim() || !timeLogForm.name.trim() || !isValidEmail(timeLogForm.contact)}
                   className="px-6 py-3 bg-black text-white rounded-xl hover:bg-gray-800 transition-all duration-200 transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none flex items-center gap-2"
                 >
                   {isLoggingTime ? (
