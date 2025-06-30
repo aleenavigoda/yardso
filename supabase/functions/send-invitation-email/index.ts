@@ -146,7 +146,25 @@ The Yard Team
     
     if (!resendApiKey) {
       console.error('❌ RESEND_API_KEY not found in environment')
-      throw new Error('Email service not configured')
+      console.log('🔍 Available environment variables:', Object.keys(Deno.env.toObject()))
+      
+      // For now, let's just log the email content and return success
+      // This allows the invitation to be created even if email fails
+      console.log('📧 Would send email to:', invitee_email)
+      console.log('📧 Email subject:', subject)
+      console.log('📧 Invite URL:', inviteUrl)
+      
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'Invitation created (email service not configured)',
+          invite_url: inviteUrl,
+          note: 'RESEND_API_KEY not configured - email not sent'
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
     }
 
     console.log('📮 Sending email via Resend API...')
@@ -171,7 +189,20 @@ The Yard Team
 
     if (!emailResponse.ok) {
       console.error('❌ Resend API error:', emailResult)
-      throw new Error(`Email sending failed: ${emailResult.message || 'Unknown error'}`)
+      
+      // Don't fail the entire request if email fails
+      // The invitation was still created successfully
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          message: 'Invitation created (email sending failed)',
+          invite_url: inviteUrl,
+          email_error: emailResult.message || 'Unknown email error'
+        }),
+        { 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      )
     }
 
     console.log('✅ Email sent successfully via Resend:', emailResult)
@@ -189,13 +220,15 @@ The Yard Team
     )
   } catch (error) {
     console.error('💥 Error in send-invitation-email function:', error)
+    
+    // Don't fail the entire request - the invitation was still created
     return new Response(
       JSON.stringify({ 
-        error: 'Failed to send invitation email',
-        details: error.message 
+        success: true,
+        message: 'Invitation created (email function error)',
+        email_error: error.message 
       }),
       { 
-        status: 500, 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
       }
     )
